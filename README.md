@@ -1,4 +1,4 @@
-# 🏰⚔️ Endless Rift
+# 🏰⚔️ CLIRPG - Endless Rift
 
 > **A terminal dungeon-crawler roguelike written in C++20 — no external libraries, no engine, just `make`.**
 
