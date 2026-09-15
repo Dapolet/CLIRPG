@@ -482,38 +482,41 @@ void showCharacter(const Character& pc, const Vault& vault) {
     std::cout << "\n";
 }
 
-void showVault(const Vault& vault) {
-    if (vault.items.empty()) {
-        panelLine(dim("Vault is empty."));
+void showVault(const Vault& vault, const std::vector<int>& gear) {
+    if (gear.empty()) {
+        panelLine(dim("No gear to manage."));
         return;
     }
-    for (std::size_t i = 0; i < vault.items.size(); ++i) {
-        const Item& it = vault.items[i];
+    for (std::size_t k = 0; k < gear.size(); ++k) {
+        const Item& it = vault.items[static_cast<std::size_t>(gear[k])];
         bool eq = false;
         for (int s = 0; s < kNumSlots; ++s)
-            if (vault.equipped[static_cast<std::size_t>(s)] == static_cast<int>(i)) eq = true;
-        panelLine(chip(static_cast<int>(i + 1)) + (eq ? color(32, std::string(kDi) + " ") : dim("  "))
+            if (vault.equipped[static_cast<std::size_t>(s)] == gear[k]) eq = true;
+        panelLine(chip(static_cast<int>(k + 1)) + (eq ? color(32, std::string(kDi) + " ") : dim("  "))
                   + color(rarityColor(it.rarity), it.describe()));
     }
 }
 
 void equipMenu(Character& pc, Vault& vault) {
     (void)pc;
+    std::vector<int> gear;
+    for (std::size_t i = 0; i < vault.items.size(); ++i)
+        if (!vault.items[i].isPot()) gear.push_back(static_cast<int>(i));
+    if (gear.empty()) {
+        std::cout << dim("  No gear to manage.\n");
+        return;
+    }
     while (true) {
         std::cout << "\n";
         titleBar("Manage gear", 36);
         panelTop("", 90);
-        showVault(vault);
+        showVault(vault, gear);
         panelLine(dim(chip(0) + "back"));
         panelBottom();
-        const int pick = io::askInt("Equip item", 0, static_cast<int>(vault.items.size()));
+        const int pick = io::askInt("Equip item", 0, static_cast<int>(gear.size()));
         if (pick == 0) return;
-        const int idx = pick - 1;
+        const int idx = gear[static_cast<std::size_t>(pick - 1)];
         const Item& it = vault.items[static_cast<std::size_t>(idx)];
-        if (it.isPot()) {
-            std::cout << dim("  That's a potion, not gear.\n");
-            continue;
-        }
         vault.equip(idx);
         panelLine(color(32, kDi) + " Equipped " + color(rarityColor(it.rarity), it.name));
         std::cout << "\n";
@@ -704,8 +707,8 @@ bool merchantMenu(Character& pc, Vault& vault, core::Rng& rng) {
         if (c == 6) { salvageMenu(vault); continue; }
         Item buy;
         int price = 0;
-        if (c == 1) { price = hpPrice; buy = makePotion(floor + rng.roll(0, 2), rng); buy.manaRestore = 0; }
-        else if (c == 2) { price = mpPrice; buy = makePotion(floor + rng.roll(0, 2), rng); buy.heal = 0; }
+        if (c == 1) { price = hpPrice; buy = makeVendorPotion(floor + rng.roll(0, 2), false); }
+        else if (c == 2) { price = mpPrice; buy = makeVendorPotion(floor + rng.roll(0, 2), true); }
         else if (c == 3) { price = shardPrice; vault.shards += 3; }
         else if (c == 4) { price = essencePrice; vault.essence += 1; }
         if (price > 0) {

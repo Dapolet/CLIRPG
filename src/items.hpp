@@ -131,6 +131,7 @@ int setPieces(const Vault& vault, SetId s);
 
 // --- loot generation ---
 Item            makePotion(int pact, core::Rng& rng);
+Item            makeVendorPotion(int pact, bool mana);
 Item            makeGear(int floor, core::Rng& rng, Rarity minRarity = Rarity::Common);
 std::vector<Item> rollLoot(int floor, bool boss, core::Rng& rng);
 Rune            makeRune(int floor, core::Rng& rng);

@@ -150,6 +150,7 @@ bool write(const std::string& path, const Character& pc, Vault& vault) {
     body << "aspect=" << vault.aspect << "\n";
     body << "totalGoldEarned=" << vault.totalGoldEarned << "\n";
     body << "nextUid=" << vault.nextUid << "\n";
+    body << "saveTime=" << vault.saveTime << "\n";
     body << "belt=" << vault.belt[0] << " " << vault.belt[1] << "\n";
     for (int n = 0; n < 2; ++n) {
         body << "loadout" << n << "=";
@@ -225,6 +226,7 @@ bool read(const std::string& path, Character* pc, Vault* vault) {
             else if (kv(line, "aspect=", &val)) v.aspect = std::stoi(val);
             else if (kv(line, "totalGoldEarned=", &val)) v.totalGoldEarned = std::stoi(val);
             else if (kv(line, "nextUid=", &val)) v.nextUid = std::stoi(val);
+            else if (kv(line, "saveTime=", &val)) v.saveTime = std::stoll(val);
             else if (kv(line, "belt=", &val)) {
                 std::istringstream isv(val);
                 isv >> v.belt[0] >> v.belt[1];

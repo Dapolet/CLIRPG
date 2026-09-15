@@ -103,8 +103,9 @@ int main(int argc, char** argv) {
 
                 const int xpGainPct = pc.stats(vault).xpGainPct;
                 const int before = pc.level();
+                const int gainedXp = res.xp + res.xp * xpGainPct / 100;
                 pc.gainXp(res.xp, xpGainPct);
-                std::cout << ui::color(32, "Victory!") << " +" << res.xp << " XP, +"
+                std::cout << ui::color(32, "Victory!") << " +" << gainedXp << " XP, +"
                           << res.loot.gold << " gold";
                 if (res.loot.shards) std::cout << ", +" << res.loot.shards << " shards";
                 if (res.loot.essence) std::cout << ", +" << res.loot.essence << " essence";

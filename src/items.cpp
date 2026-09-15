@@ -375,6 +375,21 @@ Item makePotion(int pact, core::Rng& rng) {
     return it;
 }
 
+Item makeVendorPotion(int pact, bool mana) {
+    Item it;
+    it.consumable = true;
+    it.iLvl = std::max(1, pact);
+    it.rarity = Rarity::Common;
+    if (mana) {
+        it.name = "Mana Draught";
+        it.manaRestore = 45 + 14 * it.iLvl;
+    } else {
+        it.name = "Healing Draught";
+        it.heal = 55 + 22 * it.iLvl;
+    }
+    return it;
+}
+
 Item makeGear(int floor, core::Rng& rng, Rarity minRarity) {
     Item it;
     it.consumable = false;

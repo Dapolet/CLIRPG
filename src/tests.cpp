@@ -220,6 +220,8 @@ void testSaveRoundtrip() {
     CHECK(v2.equipped == v.equipped, "roundtrip equipped");
     CHECK(v2.gold == v.gold && v2.shards == v.shards && v2.essence == v.essence,
           "roundtrip materials/gold");
+    CHECK(v2.saveTime > 0, "saveTime is stamped on write");
+    CHECK(v2.saveTime == v.saveTime, "saveTime roundtrips exactly");
     CHECK(v2.removeAt(0) == true, "removeAt works post-load");
     CHECK(v2.equipped[slotIndex(Slot::Weapon)] == -1, "removing unpins equipped");
 
@@ -611,6 +613,7 @@ void testSaveV4RecordsAndRunes() {
     const auto s = save::peek(path);
     CHECK(s.valid, "peek sees existing save");
     CHECK(s.cls == ClassId::Mage && s.level == 1 && s.floor == 42, "peek summary fields");
+    CHECK(s.saveTime > 0, "peek exposes stamped saveTime");
     std::remove(path.c_str());
 
     CHECK(!save::peek("no_such_file.rpg").valid, "peek on missing file invalid");
@@ -688,6 +691,118 @@ void testRogueFirstStrikeSmoke() {
     CHECK(res.kills == 1, "result records the kill");
 }
 
+void testBossSummonSafe() {
+    using namespace combat;
+    core::Rng rng(1234);
+    Character pc(ClassId::Warrior);
+    Vault v;
+    Item sword;
+    sword.slot = Slot::Weapon;
+    sword.power = 50;
+    v.add(sword);
+    v.equip(0);
+
+    Enemy boss;
+    boss.name = "Summon Test Boss";
+    boss.boss = true;
+    boss.hpMax = boss.hp = 100;
+    boss.attack = 2;
+    boss.xpReward = 1;
+    boss.goldReward = 1;
+
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    std::istringstream in("a\n");
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    const Result res = fight(pc, v, { boss }, rng);
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut);
+
+    CHECK(res.won, "boss plus summoned thrall is beatable");
+    CHECK(res.kills == 2, "boss and thrall both die");
+    const std::string text = out.str();
+    CHECK(text.find("summons a Dark Thrall") != std::string::npos, "thrall summon triggers");
+    CHECK(text.find("Summon Test Boss hits you") != std::string::npos,
+          "boss keeps its name after summoning (no dangling reference)");
+    CHECK(text.find("  hits you for") == std::string::npos,
+          "no empty-name enemy attack after summon");
+}
+
+void testDotExpiry() {
+    using namespace combat;
+    core::Rng rng(777);
+    Character pc(ClassId::Mage);
+    CHECK(pc.spendPoint(0, 0), "mage opens with Firebolt");
+    Vault v;
+
+    Enemy goo;
+    goo.name = "Goo";
+    goo.hpMax = goo.hp = 30;
+    goo.attack = 1;
+    goo.xpReward = 1;
+    goo.goldReward = 1;
+
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    std::istringstream in("s\n1\n");
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    const Result res = fight(pc, v, { goo }, rng);
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut);
+
+    CHECK(res.won, "mage outlasts the slime");
+    const std::string text = out.str();
+    std::size_t ticks = 0, pos = 0;
+    while ((pos = text.find("Burn bites Goo", pos)) != std::string::npos) {
+        ++ticks;
+        pos += std::string("Burn bites Goo").size();
+    }
+    CHECK(ticks == 2, "2-turn Burn ticks exactly twice then expires");
+}
+
+void testXpAppliedOnce() {
+    using namespace combat;
+    core::Rng rng(2026);
+    Character pc(ClassId::Warrior);
+    Vault v;
+    v.perks[static_cast<std::size_t>(PerkId::Insight)] = true;
+
+    Enemy rat;
+    rat.name = "Rift Rat";
+    rat.hpMax = rat.hp = 3;
+    rat.attack = 1;
+    rat.xpReward = 10;
+    rat.goldReward = 1;
+
+    std::istringstream in("a\n");
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    const Result res = fight(pc, v, { rat }, rng);
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+
+    CHECK(res.won, "trivial fight is won");
+    CHECK(res.xp == 10, "combat reports raw XP, not pre-boosted");
+    const int pct = pc.stats(v).xpGainPct;
+    CHECK(pct == 10, "Insight perk grants +10% XP");
+    pc.gainXp(res.xp, pct);
+    CHECK(pc.xp() == 11, "XP bonus applied exactly once (no double-dip)");
+}
+
+void testVendorPotion() {
+    for (int f = 1; f <= 60; ++f) {
+        const Item heal = makeVendorPotion(f, false);
+        CHECK(heal.isPot(), "vendor healing draught is a potion");
+        CHECK(heal.heal > 0 && heal.manaRestore == 0,
+              "healing draught always heals and never restores resource");
+        const Item mana = makeVendorPotion(f, true);
+        CHECK(mana.isPot(), "vendor mana draught is a potion");
+        CHECK(mana.manaRestore > 0 && mana.heal == 0,
+              "mana draught always restores resource and never heals");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -718,6 +833,10 @@ int main() {
     testSaveV4RecordsAndRunes();
     testAutoAttackToggle();
     testRogueFirstStrikeSmoke();
+    testBossSummonSafe();
+    testDotExpiry();
+    testXpAppliedOnce();
+    testVendorPotion();
 
     std::cout << "\n" << checks << " checks, " << failures << " failures\n";
     return failures == 0 ? 0 : 1;

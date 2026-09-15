@@ -377,12 +377,14 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
         // -- start of round: enemy dots --
         for (std::size_t i = 0; i < enemies.size(); ++i) {
             if (!enemies[i].alive()) continue;
-            for (const auto& t : eb[i]) {
-                if (!isDot(t) || t.power <= 0) continue;
-                enemies[i].hp = std::max(0, enemies[i].hp - t.power);
-                std::cout << ui::color(31, "  " + std::string(core::statusName(t.eff))
-                          + " bites " + enemies[i].name + " for " + std::to_string(t.power))
+            for (auto it = eb[i].begin(); it != eb[i].end();) {
+                if (!isDot(*it) || it->power <= 0) { ++it; continue; }
+                enemies[i].hp = std::max(0, enemies[i].hp - it->power);
+                std::cout << ui::color(31, "  " + std::string(core::statusName(it->eff))
+                          + " bites " + enemies[i].name + " for " + std::to_string(it->power))
                           << ".\n";
+                if (--it->turns <= 0) it = eb[i].erase(it);
+                else ++it;
             }
         }
 
@@ -552,26 +554,28 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
             std::cout << ui::color(33, "  First Strike! The enemies are caught off guard.") << "\n";
         } else {
             for (std::size_t i = 0; i < enemies.size(); ++i) {
-                Enemy& e = enemies[i];
-                if (!e.alive()) continue;
+                if (!enemies[i].alive()) continue;
                 tickTimers(eb[i]);
 
                 if (hasStatus(eb[i], core::StatusEffect::Stun)) {
-                    std::cout << ui::color(94, "  " + e.name + " is stunned and skips its turn.") << "\n";
+                    std::cout << ui::color(94, "  " + enemies[i].name + " is stunned and skips its turn.") << "\n";
                     continue;
                 }
 
-                if (e.boss && !bossSummoned && e.hp <= e.hpMax / 2) {
+                if (enemies[i].boss && !bossSummoned && enemies[i].hp <= enemies[i].hpMax / 2) {
                     bossSummoned = true;
-                    std::cout << ui::color(35, "  " + e.name + " summons a Dark Thrall!") << "\n";
+                    std::cout << ui::color(35, "  " + enemies[i].name + " summons a Dark Thrall!") << "\n";
+                    const Enemy& src = enemies[i];
                     Enemy thrall;
                     thrall.name = "Dark Thrall";
-                    thrall.hpMax = thrall.hp = std::max(4, e.hpMax / 4);
-                    thrall.attack = std::max(2, e.attack / 2);
-                    thrall.defense = e.defense / 2;
+                    thrall.hpMax = thrall.hp = std::max(4, src.hpMax / 4);
+                    thrall.attack = std::max(2, src.attack / 2);
+                    thrall.defense = src.defense / 2;
                     enemies.push_back(thrall);
                     eb.emplace_back();
                 }
+
+                Enemy& e = enemies[i];
                 if (e.boss && e.hp <= e.hpMax / 4)
                     std::cout << ui::color(31, ui::bold("  " + e.name + " ENRAGES!")) << "\n";
 
@@ -648,7 +652,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
             xp += e.xpReward;
             if (e.boss) boss = true;
         }
-        res.xp = static_cast<int>(static_cast<double>(xp) * (1.0 + st.xpGainPct / 100.0));
+        res.xp = xp;
         for (const auto& e : enemies) res.loot.gold += e.goldReward;
         res.loot.shards = (rng.chance(0.35) ? 1 : 0) + (rng.chance(0.10) ? 1 : 0);
         res.loot.essence = rng.chance(0.05) ? 1 : 0;
