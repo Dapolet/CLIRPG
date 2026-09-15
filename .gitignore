@@ -8,6 +8,7 @@ rpg_asan
 tests
 tests_asan
 *.dSYM/
+*.txt
 
 # session saves (created by the game, not the build)
 save*.rpg
