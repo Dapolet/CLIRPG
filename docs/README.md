@@ -18,7 +18,7 @@ tests, CI) or when you pass `--plain`.
 From the project root (`/Users/Dapolet/VSCode/RPG`):
 
 ```sh
-make         # or: make all  — builds ./rpg with -O2, -Wall -Wextra -Wpedantic
+make         # or: make all  — builds ./build/rpg with -O2, -Wall -Wextra -Wpedantic
 ```
 
 The build is warning-clean (`-Wpedantic` included); a non-zero exit or any
@@ -29,12 +29,12 @@ The build is warning-clean (`-Wpedantic` included); a non-zero exit or any
 ```sh
 make run          # build (if needed) then start the game
 # or directly:
-./rpg
+./build/rpg
 ```
 
 ### Flags
 
-`./rpg` accepts:
+`./build/rpg` accepts:
 
 - `--plain`, `--no-color`, `-p` — force plain ASCII output (no ANSI codes).
   Useful for logging, scripts, or terminals that can't render bold/color.
@@ -57,12 +57,13 @@ Items/menus: `i`nventory · `e`quip · `b`elt · `l`oadouts · `r`unes · `s`ets
 make tests     # compiles tests.cpp + game sources, runs the full suite
 ```
 
-The harness runs 11,912 checks (monotonicity of XP/enemy scaling, rarity drop
-weights, rune socket caps, save v5 roundtrip equality, set-piece counts, belt
+The harness runs 11,921 checks (monotonicity of XP/enemy scaling, rarity drop
+weights, rune socket caps, 12-spell class trees incl. Enfeeble/Vulnerable
+debuff spells, save v6 roundtrip equality, set-piece counts, belt
 /loadout/perk/bestiary persistence, corrupt-save rejection) and prints e.g.:
 
 ```text
-11912 checks, 0 failures
+11921 checks, 0 failures
 ```
 
 Output is rendered through the plain path (stdout is a pipe in the harness),
@@ -71,8 +72,8 @@ so tests don't depend on your terminal.
 ## Sanitizers (ASan + UBSan)
 
 ```sh
-make asan       # builds ./rpg_asan with -fsanitize=address,undefined
-./rpg_asan      # run an ASan/UBSan-instrumented playthrough
+make asan       # builds ./build/rpg_asan with -fsanitize=address,undefined
+./build/rpg_asan # run an ASan/UBSan-instrumented playthrough
 ```
 
 A clean run exits `0` with no `ERROR: AddressSanitizer:` / `runtime error:`
@@ -81,7 +82,7 @@ output. This is the go-to for memory errors before committing.
 ## Cleanup
 
 ```sh
-make clean      # removes *.o *.d rpg tests rpg_asan (NOT your save files)
+make clean      # removes build/ (objects, binaries — NOT your save files)
 rm saveN.rpg    # delete a specific saved run (created by the game)
 ```
 
@@ -92,7 +93,7 @@ interactive session.
 
 ## Save format
 
-Versioned (`RPGSAVE v5`), line-keyed sections — `[character]`, `[vault]`
+Versioned (`RPGSAVE v6`), line-keyed sections — `[character]`, `[vault]`
 (incl. rune sockets, potion belt quick-slot uids, loadouts, ascension perks,
 name-keyed bestiary, records), `[sig]` XOR checksum. Save-time is stamped on
 write and surfaced in the save-slot summary. Corrupt or older-version files are
@@ -100,13 +101,17 @@ rejected cleanly; older saves load as a fresh character in a new slot.
 
 ## File layout
 
-- `main.cpp` — game loop + menu; parses `--plain`
-- `ui.cpp` / `ui.hpp` — themed panels, glyphs, colors, terminal width, plain mode
-- `combat.cpp` — turn-based combat + bestiary/affix registration
-- `character.cpp` — classes, stats, sets/perks, mastery
-- `items.cpp` — items, sockets, runes, belt/loadouts/perks, bestiary, crafting
-- `save.cpp` — v5 persistence roundtrip
-- `core.cpp` — shared formulas/constants/rng
-- `io.cpp` — line input (piped-tolerant)
-- `tests.cpp` — `make tests` harness (11,912 checks)
-- `PLAN.md` — full design doc
+All sources live in `src/`; the build puts objects + binaries in `build/`
+(cleanly ignored by git).
+
+- `src/main.cpp` — game loop + menu; parses `--plain`
+- `src/ui.cpp` / `src/ui.hpp` — themed panels, glyphs, colors, plain mode
+- `src/combat.cpp` — turn-based combat, status effects (incl. Enfeeble /
+  Vulnerable debuffs), bestiary/affix registration
+- `src/character.cpp` — classes, 12-spell trees (depth-4 capstones), stats
+- `src/items.cpp` — items, sockets, runes, belt/loadouts/perks, crafting
+- `src/save.cpp` — v6 persistence roundtrip
+- `src/core.cpp` — shared formulas/constants/rng
+- `src/io.cpp` — line input (piped-tolerant)
+- `src/tests.cpp` — `make tests` harness (11,921 checks)
+- `docs/PLAN.md` — full design doc (v6)

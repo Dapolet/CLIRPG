@@ -134,7 +134,7 @@ bool write(const std::string& path, const Character& pc, Vault& vault) {
     body << "resource=" << snap.resource << "\n";
     body << "floor=" << snap.floor << "\n";
     body << "unlocked=";
-    for (int i = 0; i < 9; ++i) body << tag(snap.unlocked[static_cast<std::size_t>(i)]);
+    for (int i = 0; i < 12; ++i) body << tag(snap.unlocked[static_cast<std::size_t>(i)]);
     body << "\n";
 
     body << "[vault]\n";
@@ -251,7 +251,7 @@ bool read(const std::string& path, Character* pc, Vault* vault) {
             else if (kv(line, "resource=", &val)) snap.resource = std::stoi(val);
             else if (kv(line, "floor=", &val)) snap.floor = std::stoi(val);
             else if (kv(line, "unlocked=", &val)) {
-                for (int i = 0; i < 9 && static_cast<std::size_t>(i) < val.size(); ++i)
+                for (int i = 0; i < 12 && static_cast<std::size_t>(i) < val.size(); ++i)
                     snap.unlocked[static_cast<std::size_t>(i)] = val[static_cast<std::size_t>(i)] == '1';
             }
         }

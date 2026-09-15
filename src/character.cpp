@@ -19,44 +19,61 @@ Spell atk(std::string n, int cost, int cd, int pot, double lvl, int hits = 1,
 std::vector<Spell> buildSpells(ClassId c) {
     using C = core::StatusEffect;
     std::vector<Spell> s;
-    s.reserve(9);
+    s.reserve(12);
     switch (c) {
         case ClassId::Warrior:
             // branch 0: Berserker
             s.push_back(atk("Cleave", 2, 1, 3, 1.0));
             s.push_back(atk("Whirlwind", 4, 2, 7, 2.0, 2));
             s.push_back(atk("Executioner", 6, 3, 12, 3.0, 1, C::Bleed, 3, 20));
+            s.push_back(Spell{ .name = "Bloodrage", .cost = 8, .cooldown = 4,
+                               .potency = 20, .lvlScale = 5.0, .effect = C::Bleed,
+                               .effectTurns = 3 });
             // branch 1: Defender
             s.push_back(atk("Shield Slam", 2, 1, 2, 1.0, 1, C::None, 0, 30, 20));
             s.push_back(Spell{ .name = "Iron Skin", .type = SpellType::BuffSelf, .cost = 3,
                                .cooldown = 3, .buffDefense = 60, .buffTurns = 2 });
             s.push_back(Spell{ .name = "Bastion", .type = SpellType::Heal, .cost = 4,
-                               .cooldown = 3, .healPower = 10, .lvlScale = 1.2,
+                               .cooldown = 3, .lvlScale = 1.2, .healPower = 10,
                                .buffDefense = 30, .buffTurns = 2 });
+            s.push_back(Spell{ .name = "Bulwark", .type = SpellType::BuffSelf, .cost = 5,
+                               .cooldown = 5, .buffDefense = 100, .buffTurns = 2 });
             // branch 2: Warcry
             s.push_back(atk("Demoralize", 3, 2, 1, 1.0, 1, C::None, 0, 40, 10));
             s.push_back(Spell{ .name = "Rally", .type = SpellType::Heal, .cost = 3,
-                               .cooldown = 3, .healPower = 8, .lvlScale = 1.0,
+                               .cooldown = 3, .lvlScale = 1.0, .healPower = 8,
                                .buffAttack = 25, .buffTurns = 2 });
             s.push_back(Spell{ .name = "War Horn", .type = SpellType::BuffSelf, .cost = 4,
                                .cooldown = 4, .buffAttack = 50, .buffTurns = 3 });
+            s.push_back(Spell{ .name = "Cripple", .cost = 3, .cooldown = 2, .potency = 2,
+                               .lvlScale = 0.5, .effect = C::Enfeeble, .effectTurns = 3,
+                               .enemyAtkDownPct = 35 });
             break;
         case ClassId::Mage:
             // branch 0: Fire
             s.push_back(atk("Firebolt", 2, 1, 4, 1.2, 1, C::Burn, 2));
             s.push_back(atk("Meteor", 4, 2, 9, 2.5, 1, C::Burn, 3));
             s.push_back(atk("Inferno", 7, 3, 16, 4.0, 1, C::Burn, 3));
+            s.push_back(Spell{ .name = "Pyroclasm", .cost = 9, .cooldown = 4,
+                               .potency = 22, .lvlScale = 5.5, .effect = C::Burn,
+                               .effectTurns = 3 });
             // branch 1: Frost
             s.push_back(atk("Frostbolt", 2, 1, 3, 1.0, 1, C::Slow, 1));
             s.push_back(atk("Ice Nova", 4, 2, 6, 1.8, 1, C::Slow, 2, 0, 30));
             s.push_back(atk("Blizzard", 6, 3, 11, 3.0, 2, C::Slow, 2, 0, 25));
+            s.push_back(Spell{ .name = "Absolute Zero", .cost = 8, .cooldown = 4,
+                               .potency = 14, .lvlScale = 3.6, .effect = C::Slow,
+                               .effectTurns = 3, .stunChancePct = 40 });
             // branch 2: Arcane
             s.push_back(atk("Arcane Missiles", 3, 1, 2, 0.9, 3));
             s.push_back(atk("Arcane Barrage", 5, 2, 6, 1.8, 1, C::None, 0, 25));
             s.push_back(atk("Disintegrate", 8, 4, 14, 3.6, 1, C::None, 0, 40));
-            for (int i = 0; i < 3; ++i) s[static_cast<std::size_t>(i)].element = core::Element::Fire;
-            for (int i = 3; i < 6; ++i) s[static_cast<std::size_t>(i)].element = core::Element::Frost;
-            for (int i = 6; i < 9; ++i) s[static_cast<std::size_t>(i)].element = core::Element::Arcane;
+            s.push_back(Spell{ .name = "Hex", .cost = 6, .cooldown = 3, .potency = 6,
+                               .lvlScale = 1.5, .effect = C::Vulnerable, .effectTurns = 3,
+                               .enemyVulnPct = 30 });
+            for (int i = 0; i < 4; ++i) s[static_cast<std::size_t>(i)].element = core::Element::Fire;
+            for (int i = 4; i < 8; ++i) s[static_cast<std::size_t>(i)].element = core::Element::Frost;
+            for (int i = 8; i < 12; ++i) s[static_cast<std::size_t>(i)].element = core::Element::Arcane;
             break;
         case ClassId::Rogue:
             // branch 0: Shadow
@@ -67,10 +84,16 @@ std::vector<Spell> buildSpells(ClassId c) {
                                .effect = C::Guard, .effectTurns = 1 });
             s.push_back(Spell{ .name = "Shadow Step", .cost = 6, .cooldown = 3,
                                .potency = 9, .lvlScale = 2.5, .hits = 2, .critBonusSelf = 60 });
+            s.push_back(Spell{ .name = "Shadow Dance", .cost = 8, .cooldown = 4,
+                               .potency = 8, .lvlScale = 2.2, .hits = 3,
+                               .critBonusSelf = 100 });
             // branch 1: Poison
             s.push_back(atk("Venom Blade", 2, 1, 2, 0.8, 1, C::Poison, 3));
             s.push_back(atk("Corrosive Slash", 4, 2, 3, 1.2, 1, C::Poison, 2, 60));
             s.push_back(atk("Plague Sting", 6, 3, 8, 2.0, 1, C::Poison, 4, 30));
+            s.push_back(Spell{ .name = "Crippling Venom", .cost = 6, .cooldown = 3,
+                               .potency = 3, .lvlScale = 0.8, .effect = C::Poison,
+                               .effectTurns = 3, .enemyAtkDownPct = 30 });
             // branch 2: Tricks
             s.push_back(atk("Double Strike", 3, 2, 3, 1.0, 2));
             s.push_back(Spell{ .name = "Perfect Evasion", .type = SpellType::BuffSelf, .cost = 3,
@@ -78,6 +101,9 @@ std::vector<Spell> buildSpells(ClassId c) {
                                .effect = C::Guard, .effectTurns = 2 });
             s.push_back(Spell{ .name = "Lethal Flourish", .cost = 7, .cooldown = 3,
                                .potency = 10, .lvlScale = 2.8, .hits = 2, .critBonusSelf = 80 });
+            s.push_back(Spell{ .name = "Masterstroke", .cost = 9, .cooldown = 4,
+                               .potency = 9, .lvlScale = 2.5, .hits = 3,
+                               .critBonusSelf = 120 });
             break;
     }
     return s;
@@ -271,14 +297,14 @@ EffectiveStats Character::stats(const Vault& vault) const {
 }
 
 const Spell& Character::spell(int branch, int depth) const {
-    return classSpells(classId_)[static_cast<std::size_t>(branch * 3 + depth)];
+    return classSpells(classId_)[static_cast<std::size_t>(branch * 4 + depth)];
 }
 
 static int nodeCost(int depth) { return depth + 1; }
 
 bool Character::spendPoint(int branch, int depth) {
-    const int idx = branch * 3 + depth;
-    if (branch < 0 || branch > 2 || depth < 0 || depth > 2) return false;
+    const int idx = branch * 4 + depth;
+    if (branch < 0 || branch > 2 || depth < 0 || depth > 3) return false;
     if (unlocked_.at(static_cast<std::size_t>(idx))) return false;
     if (depth > 0 && !unlocked_.at(static_cast<std::size_t>(idx - 1))) return false;
     if (nodeCost(depth) > skillPoints_) return false;
@@ -294,9 +320,9 @@ void Character::respec() {
 
 int Character::pointsSpent() const {
     int total = 0;
-    for (int i = 0; i < 9; ++i) {
+    for (int i = 0; i < 12; ++i) {
         if (!unlocked_.at(static_cast<std::size_t>(i))) continue;
-        total += nodeCost(i % 3);
+        total += nodeCost(i % 4);
     }
     return total;
 }

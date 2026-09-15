@@ -16,10 +16,10 @@ jobs:
         include:
           - os: macos-latest
             artifact_name: rpg-macos
-            binary_path: ./rpg
+            binary_path: ./build/rpg
           - os: windows-latest
             artifact_name: rpg-windows
-            binary_path: ./rpg.exe
+            binary_path: ./build/rpg.exe
 
     steps:
       - name: Checkout code
@@ -49,12 +49,12 @@ jobs:
       # --- Проверяем, что бинарник действительно создан ---
       - name: Verify binary (macOS)
         if: runner.os == 'macOS'
-        run: ls -la ./rpg && file ./rpg
+        run: ls -la ./build/rpg && file ./build/rpg
 
       - name: Verify binary (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}          # ← Also needs fixing here
-        run: ls -la ./rpg.exe && file ./rpg.exe
+        run: ls -la ./build/rpg.exe && file ./build/rpg.exe
 
       # --- Загружаем артефакт ---
       - name: Upload artifact

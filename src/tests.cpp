@@ -135,9 +135,16 @@ void testAwaken() {
 void testSpellTree() {
     for (auto cls : { ClassId::Warrior, ClassId::Mage, ClassId::Rogue }) {
         Character pc(cls);
-        CHECK(classSpells(cls).size() == 9, "each class has 9 spells");
+        CHECK(classSpells(cls).size() == 12, "each class has 12 spells");
         CHECK(pc.pointsSpent() == 0, "fresh tree costs nothing");
         CHECK(pc.spendPoint(0, 2) == false, "can't skip depth without prereq");
+        CHECK(pc.spendPoint(0, 3) == false, "can't skip depth3 without prereq");
+        {
+            bool hasDebuff = false;
+            for (const auto& sp : classSpells(cls))
+                if (sp.enemyAtkDownPct > 0 || sp.enemyVulnPct > 0) hasDebuff = true;
+            CHECK(hasDebuff, "each class has an Enfeeble/Vulnerable debuff spell");
+        }
         CHECK(pc.spendPoint(0, 0), "depth0 unlockable");
         CHECK(pc.spendPoint(0, 0) == false, "can't unlock twice");
         CHECK(pc.spendPoint(0, 1) == false, "need 2 points for depth1");
@@ -383,9 +390,9 @@ void testElementTable() {
 
     // mage spells carry their branch element
     const auto& spells = classSpells(ClassId::Mage);
-    for (int i = 0; i < 3; ++i)  CHECK(spells[static_cast<std::size_t>(i)].element == E::Fire,   "fire branch");
-    for (int i = 3; i < 6; ++i)  CHECK(spells[static_cast<std::size_t>(i)].element == E::Frost,  "frost branch");
-    for (int i = 6; i < 9; ++i)  CHECK(spells[static_cast<std::size_t>(i)].element == E::Arcane, "arcane branch");
+    for (int i = 0; i < 4; ++i)  CHECK(spells[static_cast<std::size_t>(i)].element == E::Fire,   "fire branch");
+    for (int i = 4; i < 8; ++i)  CHECK(spells[static_cast<std::size_t>(i)].element == E::Frost,  "frost branch");
+    for (int i = 8; i < 12; ++i) CHECK(spells[static_cast<std::size_t>(i)].element == E::Arcane, "arcane branch");
 }
 
 void testRunestoneHelpers() {
@@ -514,8 +521,8 @@ Rune fin;    fin.type   = RuneType::Finesse;  fin.value    = 3;
 }
 
 void testHealScaling() {
-    const auto& bastion = classSpells(ClassId::Warrior)[5];
-    const auto& rally = classSpells(ClassId::Warrior)[7];
+    const auto& bastion = classSpells(ClassId::Warrior)[6];
+    const auto& rally = classSpells(ClassId::Warrior)[9];
     CHECK(spellHeal(bastion, 1) == 10 + 1, "Bastion scales 1.2/level");
     CHECK(spellHeal(bastion, 10) == 10 + 12, "Bastion scales 1.2/level");
     CHECK(spellHeal(rally, 1) == 8 + 1, "Rally scales 1.0/level");

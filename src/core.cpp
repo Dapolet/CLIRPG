@@ -44,6 +44,8 @@ const char* statusName(StatusEffect s) {
         case StatusEffect::Regeneration: return "Regeneration";
         case StatusEffect::Guard:        return "Guard";
         case StatusEffect::Rage:         return "Rage";
+        case StatusEffect::Enfeeble:     return "Enfeeble";
+        case StatusEffect::Vulnerable:   return "Vulnerable";
         default:                         return "None";
     }
 }

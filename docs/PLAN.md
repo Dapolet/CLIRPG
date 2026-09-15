@@ -11,17 +11,12 @@ progression is powered by compounding **Rift Mastery** milestones and prestige
 
 ```
 /Users/Dapolet/VSCode/RPG/
-  PLAN.md            ← this plan (v5)
-  Makefile           — targets: all / tests / asan / run / clean
-  main.cpp           — entry point, session wiring, save slots
-  ui.hpp / ui.cpp    — colored output, menus, camp / blacksmith / merchant
-  io.hpp / io.cpp    — shared input helpers (readLine / askInt)
-  core.hpp / core.cpp— RNG, dice, balance formulas, elements
-  character.hpp/.cpp — class base, spell trees, passives, effective stats
-  items.hpp / items.cpp— rarity, tiers, affixes, runestones, economy math
-  combat.hpp / .cpp  — turn loop, status effects, enemy affixes, bosses
-  save.hpp / save.cpp— versioned persistence (character + Vault + records)
-  tests.cpp          — table-driven asserts
+  src/       — all C++ sources: main.cpp, ui.*, combat.*, character.*,
+               items.*, save.*, io.*, core.*, bestiary.hpp, tests.cpp
+  build/     — generated: *.o / *.d, rpg / tests / rpg_asan / tests_asan
+  docs/      — PLAN.md (this plan, v6), README.md
+  Makefile   — targets: all / tests / asan / tests_asan / run / clean
+  .github/workflows/build.yml — msys2 Windows + macOS CI gates
 ```
 
 Build: `g++ -std=c++20 -Wall -Wextra -Wpedantic`. No external dependencies.
@@ -44,6 +39,13 @@ save imports character + items
 C++ idioms (per cpp-pro skill):
 
 - `enum class` for Rarity / Slot / ItemTier / AffixType / StatusEffect /
+   ClassId / EnemyAffix / SpellType / Element / RuneType / CampResult.
+- Spell trees are 12 spells/class (4 capstones; index = branch*4 + depth);
+  built once and cached (`classSpells` returns `const std::vector<Spell>&`).
+- Spell `Spell{...}` designators MUST follow the struct's declaration order
+  (name, type, cost, cooldown, potency, lvlScale, hits, healPower, buffAttack,
+  buffDefense, buffTurns, effect, effectTurns, armorShred, stunChancePct,
+  critBonusSelf, element, enemyAtkDownPct, enemyVulnPct).
   ClassId / EnemyAffix / SpellType / Element / RuneType / CampResult.
 - Static data tables as `constexpr std::array`; class spell trees built once
   and **cached** (`classSpells` returns `const std::vector<Spell>&`).
@@ -141,6 +143,12 @@ salvageShards = 1 + iLvl/20 + 2·(rarity)     // epic+ also yields 1 essence
 - **Elements**: Mage spells carry Fire / Frost / Arcane; elemental enemies get
   an alignment (Cultist=Arcane, Wraith=Frost, Imp=Fire, + random at floor≥6).
   `elementMult` table applies — matching element ×0.7, counter ×1.3.
+- **Debuffs (Enfeeble / Vulnerable)**: each class has a depth-4 capstone debuff
+  spell (Warrior "Cripple" = Enfeeble, Mage "Hex" = Vulnerable, Rogue
+  "Crippling Venom" = Enfeeble+Poison). `enemyAtkDownPct` applies Enfeeble
+  (enemy attack ×(100−pct)/100 for N turns); `enemyVulnPct` applies Vulnerable
+  (enemy takes ×(100+pct)/100 damage for N turns). Applied on hits of both
+  basic attacks and spells; Vulnerable multiplies all damage to the target.
 
 ## 7. Runestones (socketables)
 
@@ -169,16 +177,17 @@ salvageShards = 1 + iLvl/20 + 2·(rarity)     // epic+ also yields 1 essence
   First Blood, Boss Slayer, Deep Delver (floor 25), Dungeon Master (floor 50),
   Riftbreaker (floor 100), Legendary Hunter, Ascendant, Master of the Rift.
 
-## 10. Save Format (`saveN.rpg` v5)
+## 10. Save Format (`saveN.rpg` v6)
 
-Versioned (`RPGSAVE v5`), line-keyed sections: `[version]`, `[character]`,
+Versioned (`RPGSAVE v6`), line-keyed sections: `[version]`, `[character]`,
 `[vault]` (incl. runs, belt quick-slots, loadouts, perks, bestiary, records),
 `[sig]` (XOR checksum). Items serialize their socketed runes plus a stable
 `uid` and optional `setTag`; belt/loadout fields and the bestiary (name-keyed
 maps — future-proof) ride along so new content never invalidates a save.
 `[character]` carries class/level/xp/skillPoints/hp/resource/floor/unlocked
-aspects; `saveTime` + total gold earned are stamped on write and surfaced in
-save-slot summaries. Corrupt/unknown/older-version files are rejected cleanly.
+(12-slot spell tree) aspects; `saveTime` + total gold earned are stamped on
+write and surfaced in save-slot summaries. Corrupt/unknown/older-version
+files are rejected cleanly (v5 and earlier saves are rejected).
 
 ## 11. Test Matrix (tests.cpp)
 
@@ -186,7 +195,10 @@ save-slot summaries. Corrupt/unknown/older-version files are rejected cleanly.
 - drop iLvl lags floor & is upgrade-reachable (the A1 fix)
 - boss loot contains an Epic+ item (the A2 fix)
 - spellHeal scales with level (the A3 fix)
-- classSpells cache / spell lookup (the A4 fix)
+- classSpells cache / spell lookup — 12 spells/class (the A4 fix)
+- every class owns ≥1 Enfeeble/Vulnerable debuff spell; depth-3 capstones
+  unlock in declaration order (Enfeeble before Vulnerable, lvlScale before
+  healPower, etc. — the Windows msys2 GCC regression guard)
 - mastery multipliers monotonic in stats
 - rune socket cap (by rarity), bind/extract roundtrip, save roundtrip incl.
   runes + records

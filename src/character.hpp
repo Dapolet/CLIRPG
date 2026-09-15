@@ -34,9 +34,11 @@ struct Spell {
     int stunChancePct = 0;
     int critBonusSelf = 0;            // extra crit bonus for this cast
     core::Element element = core::Element::None;
+    int enemyAtkDownPct = 0;          // enemy: Enfeeble power  (-% attack)
+    int enemyVulnPct = 0;             // enemy: Vulnerable power (+% damage taken)
 };
 
-// 9 spells per class; index = branch * 3 + depth. Built once, cached.
+// 12 spells per class; index = branch * 4 + depth. Built once, cached.
 const std::vector<Spell>& classSpells(ClassId c);
 int spellDamage(const Spell& s, int level);
 int spellHeal(const Spell& s, int level);
@@ -72,12 +74,12 @@ public:
 
     EffectiveStats stats(const Vault& vault) const;
 
-    bool isUnlocked(int branch, int depth) const { return unlocked_.at(branch * 3 + depth); }
+    bool isUnlocked(int branch, int depth) const { return unlocked_.at(branch * 4 + depth); }
     const Spell& spell(int branch, int depth) const;
     bool spendPoint(int branch, int depth);
     void respec();
     int pointsSpent() const;
-    std::array<bool, 9> tree() const { return unlocked_; }
+    std::array<bool, 12> tree() const { return unlocked_; }
 
     void gainXp(int amount, int gainPct);
     void healHp(int n, int cap = 0);
@@ -96,7 +98,7 @@ public:
         int hp = 0;
         int resource = 0;
         int floor = 1;
-        std::array<bool, 9> unlocked{};
+        std::array<bool, 12> unlocked{};
     };
     Snapshot snapshot() const;
     void restore(const Snapshot& s);
@@ -109,7 +111,7 @@ private:
     int hp_ = 0;
     int resource_ = 0;
     int floor_ = 1;
-    std::array<bool, 9> unlocked_{};
+    std::array<bool, 12> unlocked_{};
 };
 
 } // namespace rpg

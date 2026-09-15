@@ -1,0 +1,13 @@
+# build artifacts (src/ sources, build/ outputs)
+build/
+*.o
+*.d
+*.exe
+rpg
+rpg_asan
+tests
+tests_asan
+*.dSYM/
+
+# session saves (created by the game, not the build)
+save*.rpg

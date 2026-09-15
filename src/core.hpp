@@ -69,6 +69,8 @@ enum class StatusEffect {
     None, Burn, Bleed, Poison,
     Slow, Stun, ArmorShred,
     Regeneration, Guard, Rage,
+    Enfeeble,      // enemy attack reduced by power% for N turns
+    Vulnerable,    // enemy takes +power% damage for N turns
 };
 
 const char* statusName(StatusEffect s);

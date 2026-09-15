@@ -1,43 +1,74 @@
+# Endless Rift — MSYS2/Windows-compatible Makefile (src/ + build/ layout)
 CXX       ?= g++
 STD       := -std=c++20
 WARN      := -Wall -Wextra -Wpedantic
 OPT       := -O2
 COMMON    := $(STD) $(WARN) $(OPT)
+SRC       := src
+BUILD     := build
 
-# Определяем ОС: Windows_NT устанавливается на Windows
+# Windows binary marker used by CI (msys2 sets OS=Windows_NT)
 ifeq ($(OS),Windows_NT)
     EXE_EXT := .exe
-    RM      := rm -f
 else
     EXE_EXT :=
-    RM      := rm -f
 endif
 
-SRCS      := main.cpp ui.cpp combat.cpp character.cpp items.cpp save.cpp io.cpp core.cpp
-OBJS      := $(SRCS:.cpp=.o)
-GAMEOBJS  := core.o items.o character.o combat.o save.o ui.o io.o
+# Sources live in src/; objects + binaries land in build/.
+MAIN      := main.cpp
+GAME      := ui.cpp combat.cpp character.cpp items.cpp save.cpp io.cpp core.cpp
+TEST      := tests.cpp
+SRCS      := $(MAIN) $(GAME) $(TEST)
 
-all: rpg$(EXE_EXT)
+GAMEOBJS  := $(addprefix $(BUILD)/,$(GAME:.cpp=.o))
+MAINOBJ   := $(addprefix $(BUILD)/,$(MAIN:.cpp=.o))
+TESTOBJ   := $(addprefix $(BUILD)/,$(TEST:.cpp=.o))
+CFILES    := $(addprefix $(SRC)/,$(SRCS))
+GAMECFILES:= $(addprefix $(SRC)/,$(GAME))
+RPGCFILES := $(GAMECFILES) $(SRC)/$(MAIN)
+ASANTESTF := $(GAMECFILES) $(SRC)/$(TEST)
 
-rpg$(EXE_EXT): $(OBJS)
-	$(CXX) $(COMMON) $(OBJS) -o $@
+RPG       := $(BUILD)/rpg$(EXE_EXT)
+TESTS     := $(BUILD)/tests$(EXE_EXT)
+RPG_ASAN  := $(BUILD)/rpg_asan$(EXE_EXT)
+CAS_TST   := $(BUILD)/tests_asan$(EXE_EXT)
 
-%.o: %.cpp
+all: $(RPG)
+
+$(RPG): $(GAMEOBJS) $(MAINOBJ)
+	$(CXX) $(COMMON) $^ -o $@
+
+$(BUILD)/%.o: $(SRC)/%.cpp
+	@mkdir -p $(BUILD)
 	$(CXX) $(COMMON) -MMD -MP -c $< -o $@
 
--include $(OBJS:.o=.d) tests.d
+-include $(BUILD)/*.d
 
-tests: tests.o $(GAMEOBJS)
-	$(CXX) $(COMMON) $^ -o $@$(EXE_EXT)
-	./$@$(EXE_EXT)
+# tests: game sources + tests.cpp (no main.cpp — tests has its own main).
+$(TESTS): $(GAMEOBJS) $(TESTOBJ)
+	$(CXX) $(COMMON) $^ -o $@
 
-asan:
-	$(CXX) $(STD) $(WARN) -g -O1 -fsanitize=address,undefined $(SRCS) -o rpg_asan$(EXE_EXT)
+# ASan/UBSan binaries are compiled from source with instrumentation.
+$(RPG_ASAN): $(RPGCFILES)
+	@mkdir -p $(BUILD)
+	$(CXX) $(COMMON) -O1 -g -fsanitize=address,undefined $^ -o $@
 
-run: rpg$(EXE_EXT)
-	./rpg$(EXE_EXT)
+$(CAS_TST): $(ASANTESTF)
+	@mkdir -p $(BUILD)
+	$(CXX) $(COMMON) -O1 -g -fsanitize=address,undefined $^ -o $@
+
+tests: $(TESTS)
+	./$(TESTS)
+
+asan: $(RPG_ASAN)
+
+tests_asan: $(CAS_TST)
+	./$(CAS_TST)
+
+run: $(RPG)
+	./$(RPG)
 
 clean:
-	$(RM) *.o *.d rpg rpg.exe tests tests.exe rpg_asan rpg_asan.exe
+	rm -rf $(BUILD)
 
-.PHONY: all tests asan run clean
+.PHONY: all tests asan tests_asan run clean

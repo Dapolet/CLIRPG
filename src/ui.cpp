@@ -515,7 +515,7 @@ void spellBook(const Character& pc) {
     titleBar(std::string("Spell tree \u2014 ") + std::to_string(pc.skillPoints()) + " points", 34);
     for (int b = 0; b < 3; ++b) {
         std::string line = color(33, bold(branchName(pc.classId(), b))) + ":";
-        for (int i = b; i < 9; i += 3) {
+        for (int i = b; i < 12; i += 4) {
             const Spell& s = spells[static_cast<std::size_t>(i)];
             if (tree[static_cast<std::size_t>(i)])
                 line += "  " + color(33, std::string(kMed) + " " + s.name);
@@ -578,7 +578,7 @@ bool spellTrainer(Character& pc) {
         if (line[0] == '0') return false;
         int b = 0, d = 0;
         if (std::sscanf(line.c_str(), "%d %d", &b, &d) != 2) continue;
-        if (b < 1 || b > 3 || d < 1 || d > 3) continue;
+        if (b < 1 || b > 3 || d < 1 || d > 4) continue;
         if (pc.spendPoint(b - 1, d - 1))
             panelLine(color(34, kDi) + " Learned " + pc.spell(b - 1, d - 1).name);
         else

@@ -229,6 +229,13 @@ namespace {
 
 // One player basic attack. Handles rage, adrenaline, crit, ethereal, lifesteal,
 // cursed thorns, armor shred. Returns damage dealt (0 = whiffed/missed).
+// Helper: extra damage taken by enemy from Vulnerable (+%). 1.0 = none.
+double vulnMult(const std::vector<Timer>& eb) {
+    int pct = 0;
+    if (hasStatus(eb, core::StatusEffect::Vulnerable, &pct))
+        return static_cast<double>(100 + pct) / 100.0;
+    return 1.0;
+}
 int dealAttack(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
                Enemy& e, std::vector<Timer>& eb, core::Rng& rng,
                int& adrenaline, int critExtra, bool compact) {
@@ -247,6 +254,7 @@ int dealAttack(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
     dmg = core::mitigate(dmg, mitigatedDef(e, eb));
     if (rng.chance(static_cast<double>(st.critChance + critExtra) / 100.0))
         dmg = core::critValue(dmg, st.critBonus);
+    dmg *= vulnMult(eb);
     const int dealt = std::max(1, static_cast<int>(dmg));
     e.hp = std::max(0, e.hp - dealt);
     if (compact) {
@@ -290,6 +298,7 @@ int dealSpell(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
             continue;
         }
         dmg = core::mitigate(dmg, ei);
+        dmg *= vulnMult(eb);
         if (rng.chance(static_cast<double>(st.critChance + s.critBonusSelf + critExtra) / 100.0))
             dmg = core::critValue(dmg, st.critBonus);
         const int dealt = std::max(1, static_cast<int>(dmg));
@@ -322,7 +331,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
     const EffectiveStats st = pc.stats(vault);
     std::vector<Timer> pb;                        // player buffs/timers
     std::vector<std::vector<Timer>> eb(enemies.size());
-    std::array<int, 9> cd{};
+    std::array<int, 12> cd{};
     bool bossSummoned = false;
     int adrenaline = 0;
     bool autoActive = false;
@@ -461,7 +470,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
             const auto& spells = classSpells(pc.classId());
             const auto tree = pc.tree();
             std::cout << ui::color(90, "  Spells:") << "\n";
-            for (int i = 0; i < 9; ++i) {
+            for (int i = 0; i < 12; ++i) {
                 if (!tree[static_cast<std::size_t>(i)]) continue;
                 const Spell& s = spells[static_cast<std::size_t>(i)];
                 std::cout << ui::color(96, "    [" + std::to_string(i + 1) + "] ")
@@ -471,7 +480,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                     std::cout << ui::color(31, "  [recharging " + std::to_string(cd[static_cast<std::size_t>(i)]) + "]");
                 std::cout << "\n";
             }
-            const int pick = io::askInt("Cast which?", 1, 9);
+            const int pick = io::askInt("Cast which?", 1, 12);
             const int idx = pick - 1;
             if (!tree[static_cast<std::size_t>(idx)]) {
                 std::cout << ui::dim("  Not learned.") << "\n";
@@ -516,6 +525,10 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                             applyStatus(eb[tgt], core::StatusEffect::ArmorShred, 3, s.armorShred);
                         if (s.stunChancePct > 0 && rng.chance(s.stunChancePct / 100.0))
                             applyStatus(eb[tgt], core::StatusEffect::Stun, 1, 0);
+                        if (s.enemyVulnPct > 0)
+                            applyStatus(eb[tgt], core::StatusEffect::Vulnerable, s.effectTurns, s.enemyVulnPct);
+                        if (s.enemyAtkDownPct > 0)
+                            applyStatus(eb[tgt], core::StatusEffect::Enfeeble, s.effectTurns, s.enemyAtkDownPct);
                     }
                 } else {
                     std::cout << ui::color(96, "  " + s.name + "!") << "\n";
@@ -565,6 +578,9 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 const bool enraged = e.boss && e.hp <= e.hpMax / 4;
                 double atk = static_cast<double>(e.attack) * (0.9 + 0.2 * rng.roll01());
                 if (hasStatus(eb[i], core::StatusEffect::Slow)) atk *= 0.5;
+                int enfPct = 0;
+                if (hasStatus(eb[i], core::StatusEffect::Enfeeble, &enfPct))
+                    atk *= static_cast<double>(100 - enfPct) / 100.0;
                 if (enraged) atk *= 2.0;
                 if (e.has(EnemyAffix::Berserker))
                     atk *= 1.0 + 1.5 * (1.0 - static_cast<double>(e.hp) / e.hpMax);
