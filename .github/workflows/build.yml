@@ -16,17 +16,17 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: rpg-linux
-            binary_name: rpgcli-linux
-            binary_path: ./build/rpgcli-linux
+            artifact_name: clirpg-linux
+            binary_name: clirpg-linux
+            binary_path: ./build/clirpg-linux
           - os: macos-latest
-            artifact_name: rpg-macos
-            binary_name: rpgcli-macos
-            binary_path: ./build/rpgcli-macos
+            artifact_name: clirpg-macos
+            binary_name: clirpg-macos
+            binary_path: ./build/clirpg-macos
           - os: windows-latest
-            artifact_name: rpg-windows
-            binary_name: rpgcli-win
-            binary_path: ./build/rpgcli-win.exe
+            artifact_name: clirpg-windows
+            binary_name: clirpg-win
+            binary_path: ./build/clirpg-win.exe
 
     steps:
       - name: Checkout code
@@ -61,16 +61,16 @@ jobs:
       # --- Проверяем, что бинарник действительно создан ---
       - name: Verify binary (Linux)
         if: runner.os == 'Linux'
-        run: ls -la ./build/rpgcli-linux && file ./build/rpgcli-linux
+        run: ls -la ./build/clirpg-linux && file ./build/clirpg-linux
 
       - name: Verify binary (macOS)
         if: runner.os == 'macOS'
-        run: ls -la ./build/rpgcli-macos && file ./build/rpgcli-macos
+        run: ls -la ./build/clirpg-macos && file ./build/clirpg-macos
 
       - name: Verify binary (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}          # ← Also needs fixing here
-        run: ls -la ./build/rpgcli-win.exe && file ./build/rpgcli-win.exe
+        run: ls -la ./build/clirpg-win.exe && file ./build/clirpg-win.exe
 
       # --- Загружаем артефакт ---
       - name: Upload artifact

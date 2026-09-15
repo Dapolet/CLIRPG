@@ -4,7 +4,7 @@
 
 Descend an endless rift, clear floors, hoard loot, and push your build to the limit. Pure TTY flavor with a colorful themed UI (ANSI true-color) that degrades gracefully to plain ASCII in pipes, tests, and CI.
 
-![Badge: C++20](https://img.shields.io/badge/C%2B%2B-20-blue) ![Badge: no-deps](https://img.shields.io/badge/dependencies-none-brightgreen) ![Badge: tests](https://img.shields.io/badge/tests-12%2C782%20checks-success) ![Badge: platform](https://img.shields.io/badge/macOS-Windows-brightgreen)
+![Badge: C++20](https://img.shields.io/badge/C%2B%2B-20-blue) ![Badge: no-deps](https://img.shields.io/badge/dependencies-none-brightgreen) ![Badge: tests](https://img.shields.io/badge/tests-12%2C782%20checks-success) ![Badge: platform](https://img.shields.io/badge/macOS-Linux-Windows-brightgreen)
 
 ---
 
@@ -28,14 +28,14 @@ Descend an endless rift, clear floors, hoard loot, and push your build to the li
 Prerequisites: a C++20 compiler (`g++` / `clang++`), `make`. That's it.
 
 ```sh
-make          # builds ./build/rpg (warning-clean: -O2 -Wall -Wextra -Wpedantic)
+make          # builds ./build/clirpg (warning-clean: -O2 -Wall -Wextra -Wpedantic)
 make run      # build (if needed) then play
-./build/rpg   # or run directly
+./build/clirpg   # or run directly
 ```
 
 ```sh
-./build/rpg --plain      # force plain-ASCII output (no ANSI codes)
-./build/rpg --no-color   # same, alias
+./build/clirpg --plain     # force plain-ASCII output (no ANSI codes)
+./build/clirpg --no-color  # same, alias
 ```
 
 The build must compile with **zero warnings** — any `warning:` line is a bug.
@@ -63,7 +63,7 @@ Run the loop: **camp → blacksmith/merchant/trainer → descend → fight → r
 ```sh
 make tests       # full suite → prints "12782 checks, 0 failures"
 make asan        # ASan+UBSan build of the game
-./build/rpg_asan # play through it clean
+./build/clirpg_asan # play through it clean
 make tests_asan  # whole test suite under ASan+UBSan
 ```
 

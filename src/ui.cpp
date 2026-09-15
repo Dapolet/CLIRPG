@@ -364,10 +364,10 @@ void printHeader() {
     const int w = panelWidth();
     std::cout << color(36, std::string(gl(kLt, "+")) + h(w - 2) + std::string(gl(kRt, "+"))) << "\n";
     std::cout << color(36, std::string(gl(kVr, "|")) + " "
-                + center(std::string(kGem) + "  E N D L E S S   R I F T  " + kGem, w - 4) + " "
+                + center(std::string(kGem) + "  C L I R P G  " + kGem, w - 4) + " "
                 + std::string(gl(kVr, "|"))) << "\n";
     std::cout << color(36, std::string(gl(kVr, "|")) + " "
-                + center("a CLI dungeon crawler of endless ascent", w - 4) + " "
+                + center("Endless Rift  \u2014  a CLI dungeon crawler", w - 4) + " "
                 + std::string(gl(kVr, "|"))) << "\n";
     std::cout << color(36, std::string(gl(kLb, "+")) + h(w - 2) + std::string(gl(kRb, "+"))) << "\n\n";
 }
