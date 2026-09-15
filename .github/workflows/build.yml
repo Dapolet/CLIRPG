@@ -35,9 +35,10 @@ jobs:
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
+          msystem: UCRT64          # ← Ключевое: явно выбираем среду
           update: true
           install: >-
-            mingw-w64-x86_64-gcc
+            mingw-w64-ucrt-x86_64-gcc
             make
 
       - name: Build (Windows)
@@ -49,7 +50,7 @@ jobs:
       - name: Verify binary (macOS)
         if: runner.os == 'macOS'
         run: ls -la ./rpg && file ./rpg
-        
+
       - name: Verify binary (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}          # ← Also needs fixing here
