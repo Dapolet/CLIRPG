@@ -14,3 +14,6 @@ save*.rpg
 
 # handoff/scratch notes for the working session
 progress.md
+
+# docs are local planning/memory notes only (GitHub page = root README.md)
+docs/
