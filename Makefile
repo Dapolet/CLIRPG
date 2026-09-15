@@ -28,7 +28,8 @@ GAMECFILES:= $(addprefix $(SRC)/,$(GAME))
 RPGCFILES := $(GAMECFILES) $(SRC)/$(MAIN)
 ASANTESTF := $(GAMECFILES) $(SRC)/$(TEST)
 
-RPG       := $(BUILD)/rpg$(EXE_EXT)
+BIN_NAME  ?= rpg
+RPG       := $(BUILD)/$(BIN_NAME)$(EXE_EXT)
 TESTS     := $(BUILD)/tests$(EXE_EXT)
 RPG_ASAN  := $(BUILD)/rpg_asan$(EXE_EXT)
 CAS_TST   := $(BUILD)/tests_asan$(EXE_EXT)
