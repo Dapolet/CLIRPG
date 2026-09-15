@@ -42,17 +42,17 @@ jobs:
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        shell: msys2 {0}
+        shell: msys2 {0}          # ← Key fix: must include {0}
         run: make
 
       # --- Проверяем, что бинарник действительно создан ---
       - name: Verify binary (macOS)
         if: runner.os == 'macOS'
         run: ls -la ./rpg && file ./rpg
-
+        
       - name: Verify binary (Windows)
         if: runner.os == 'Windows'
-        shell: msys2 {0}
+        shell: msys2 {0}          # ← Also needs fixing here
         run: ls -la ./rpg.exe && file ./rpg.exe
 
       # --- Загружаем артефакт ---
