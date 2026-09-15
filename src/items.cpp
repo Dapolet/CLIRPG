@@ -18,9 +18,15 @@ constexpr const char* kRarityNames[kNumRarities] = {
 constexpr const char* kSlotWords[kNumSlots] = {
     "Weapon", "Armor", "Ring", "Amulet",
 };
-constexpr const char* kItemBaseNames[kNumSlots] = {
-    "Blade", "Armor", "Ring", "Amulet",
+constexpr const char* kWeaponBases[10] = {
+    "Sword", "Axe", "Mace", "Dagger", "Warhammer",
+    "Spear", "Bow", "Scythe", "Longsword", "Staff",
 };
+constexpr const char* kArmorBases[10] = {
+    "Hauberk", "Plate", "Robe", "Leathers", "Vestments",
+    "Brigandine", "Scale", "Gambeson", "Cuirass", "Greatcloak",
+};
+constexpr const char* kTrinketBaseNames[2] = { "Ring", "Amulet" };
 constexpr const char* kTierNames[kNumTiers] = {
     "Iron", "Steel", "Mythril", "Adamant", "Void",
 };
@@ -349,13 +355,29 @@ void rerollAffixes(Item& it, core::Rng& rng) {
     }
 }
 
-void refreshName(Item& it) {
-    std::string base = std::string(tierName(it.tier)) + " " + kItemBaseNames[slotIndex(it.slot)];
-    if (it.affixes.empty()) {
-        it.name = base;
-        return;
+const char* gearBase(const Item& it) {
+    if (it.slot == Slot::Weapon) {
+        const int seed = static_cast<int>(it.tier) * 13 + static_cast<int>(it.rarity) * 7
+                       + it.iLvl * 5 + it.power;
+        return kWeaponBases[seed % 10];
     }
-    it.name = it.affixes.front().prefix + " " + base;
+    if (it.slot == Slot::Armor) {
+        const int seed = static_cast<int>(it.tier) * 13 + static_cast<int>(it.rarity) * 7
+                       + it.iLvl * 5 + it.power;
+        return kArmorBases[seed % 10];
+    }
+    return kTrinketBaseNames[slotIndex(it.slot) - 2];
+}
+
+void refreshName(Item& it) {
+    std::string subtype = gearBase(it);
+    if (it.slot == Slot::Weapon || it.slot == Slot::Armor) {
+        const std::size_t sp = it.name.rfind(' ');
+        if (sp != std::string::npos && sp + 1 < it.name.size())
+            subtype = it.name.substr(sp + 1);
+    }
+    const std::string base = std::string(tierName(it.tier)) + " " + subtype;
+    it.name = it.affixes.empty() ? base : it.affixes.front().prefix + " " + base;
 }
 
 } // namespace

@@ -92,13 +92,32 @@ void testReforgeKeepIdentity() {
         const auto rarity = it.rarity;
         const int ilvl = it.iLvl;
         const int na = static_cast<int>(it.affixes.size());
+        const std::string subtype = it.name.substr(it.name.rfind(' ') + 1);
         reforge(it, rng);
         CHECK(it.slot == slot, "reforge keeps slot");
         CHECK(it.rarity == rarity, "reforge keeps rarity");
         CHECK(it.iLvl == ilvl, "reforge keeps iLvl");
         CHECK(static_cast<int>(it.affixes.size()) == na, "reforge keeps affix count");
+        CHECK(subtype == it.name.substr(it.name.rfind(' ') + 1), "reforge keeps gear type");
         CHECK(!it.name.empty(), "reforge regens name");
     }
+}
+
+void testGearTypeVariety() {
+    core::Rng rng(777);
+    std::set<std::string> weapons, armor;
+    for (int i = 0; i < 800; ++i) {
+        const Item it = makeGear(200, rng);
+        if (it.slot == Slot::Weapon) {
+            CHECK(it.name.find(" Blade") == std::string::npos, "weapon uses a real weapon type");
+            weapons.insert(it.name.substr(it.name.rfind(' ') + 1));
+        } else if (it.slot == Slot::Armor) {
+            CHECK(it.name.find(" Armor") == std::string::npos, "armor uses a real armor type");
+            armor.insert(it.name.substr(it.name.rfind(' ') + 1));
+        }
+    }
+    CHECK(weapons.size() >= 8, "at least 8 weapon types appear");
+    CHECK(armor.size() >= 8, "at least 8 armor types appear");
 }
 
 void testUpgradeCap() {
@@ -810,6 +829,7 @@ int main() {
     testFormulas();
     testRarityDistribution();
     testReforgeKeepIdentity();
+    testGearTypeVariety();
     testUpgradeCap();
     testAwaken();
     testSpellTree();
