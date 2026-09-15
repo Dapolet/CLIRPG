@@ -11,3 +11,6 @@ tests_asan
 
 # session saves (created by the game, not the build)
 save*.rpg
+
+# handoff/scratch notes for the working session
+progress.md
