@@ -1,0 +1,115 @@
+#pragma once
+
+#include "core.hpp"
+#include "items.hpp"
+
+#include <array>
+#include <string>
+#include <vector>
+
+namespace rpg {
+
+enum class ClassId { Warrior, Mage, Rogue };
+
+const char* className(ClassId c);
+const char* resourceName(ClassId c);
+
+enum class SpellType { Attack, Heal, BuffSelf };
+
+struct Spell {
+    std::string name;
+    SpellType type = SpellType::Attack;
+    int cost = 0;
+    int cooldown = 0;
+    int potency = 0;                  // base damage
+    double lvlScale = 0.0;            // + damage per level
+    int hits = 1;
+    int healPower = 0;                // + heal per level
+    int buffAttack = 0;               // % self buff
+    int buffDefense = 0;              // % self buff
+    int buffTurns = 0;
+    core::StatusEffect effect = core::StatusEffect::None;
+    int effectTurns = 0;
+    int armorShred = 0;               // enemy defense shred (debuff)
+    int stunChancePct = 0;
+    int critBonusSelf = 0;            // extra crit bonus for this cast
+    core::Element element = core::Element::None;
+};
+
+// 9 spells per class; index = branch * 3 + depth. Built once, cached.
+const std::vector<Spell>& classSpells(ClassId c);
+int spellDamage(const Spell& s, int level);
+int spellHeal(const Spell& s, int level);
+int resourceRegenPerTurn(ClassId c);
+
+struct EffectiveStats {
+    int maxHp = 0;
+    int maxResource = 0;
+    int attack = 0;
+    int defense = 0;
+    int critChance = 0;
+    int critBonus = 0;
+    int regenPerTurn = 0;
+    int manaRegenPerTurn = 0;
+    int lifeStealPct = 0;
+    int xpGainPct = 0;
+};
+
+class Character {
+public:
+    explicit Character(ClassId id);
+
+    ClassId classId() const { return classId_; }
+    int level() const { return level_; }
+    int xp() const { return xp_; }
+    int xpToNext() const { return core::xpNeeded(level_); }
+    int hp() const { return hp_; }
+    int resource() const { return resource_; }
+    int skillPoints() const { return skillPoints_; }
+    int currentFloor() const { return floor_; }
+    void setFloor(int f) { floor_ = f; }
+    bool alive() const { return hp_ > 0; }
+
+    EffectiveStats stats(const Vault& vault) const;
+
+    bool isUnlocked(int branch, int depth) const { return unlocked_.at(branch * 3 + depth); }
+    const Spell& spell(int branch, int depth) const;
+    bool spendPoint(int branch, int depth);
+    void respec();
+    int pointsSpent() const;
+    std::array<bool, 9> tree() const { return unlocked_; }
+
+    void gainXp(int amount, int gainPct);
+    void healHp(int n, int cap = 0);
+    void takeDamage(int n);
+    void spendResource(int n);
+    void restoreResource(int n, int cap = 0);
+    void restoreAll(int hpCap = 0, int resCap = 0);
+    bool canCast(const Spell& s) const { return resource_ >= s.cost; }
+
+    // serialization support
+    struct Snapshot {
+        ClassId id = ClassId::Warrior;
+        int level = 1;
+        int xp = 0;
+        int skillPoints = 0;
+        int hp = 0;
+        int resource = 0;
+        int floor = 1;
+        std::array<bool, 9> unlocked{};
+    };
+    Snapshot snapshot() const;
+    void restore(const Snapshot& s);
+
+private:
+    ClassId classId_ = ClassId::Warrior;
+    int level_ = 1;
+    int xp_ = 0;
+    int skillPoints_ = 2;          // enough to pick an opening spell
+    int hp_ = 0;
+    int resource_ = 0;
+    int floor_ = 1;
+    std::array<bool, 9> unlocked_{};
+};
+
+} // namespace rpg

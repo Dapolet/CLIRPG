@@ -1,0 +1,64 @@
+name: Build Cross-Platform
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact_name: rpg-macos
+            binary_path: ./rpg
+          - os: windows-latest
+            artifact_name: rpg-windows
+            binary_path: ./rpg.exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- macOS: clang++ уже установлен ---
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: make
+
+      # --- Windows: ставим MSYS2 с GCC и make ---
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            make
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: make
+
+      # --- Проверяем, что бинарник действительно создан ---
+      - name: Verify binary (macOS)
+        if: runner.os == 'macOS'
+        run: ls -la ./rpg && file ./rpg
+
+      - name: Verify binary (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: ls -la ./rpg.exe && file ./rpg.exe
+
+      # --- Загружаем артефакт ---
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.binary_path }}
+          retention-days: 30
