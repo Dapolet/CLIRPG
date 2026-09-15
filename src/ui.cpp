@@ -10,8 +10,12 @@
 #include <iostream>
 #include <string>
 
+#ifndef _WIN32
 #include <sys/ioctl.h>
 #include <unistd.h>
+#else
+#include <io.h>
+#endif
 
 namespace rpg::ui {
 
@@ -201,9 +205,11 @@ bool extractAction(Item& it, Vault& vault) {
 } // namespace
 
 int terminalWidth() {
+#ifndef _WIN32
     struct winsize w;
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
         return static_cast<int>(w.ws_col);
+#endif
     if (const char* c = std::getenv("COLUMNS")) {
         const int v = std::atoi(c);
         if (v > 0) return v;
@@ -211,7 +217,13 @@ int terminalWidth() {
     return 80;
 }
 
-bool isTty() { return isatty(STDOUT_FILENO) != 0; }
+bool isTty() {
+#ifdef _WIN32
+    return _isatty(_fileno(stdout)) != 0;
+#else
+    return isatty(STDOUT_FILENO) != 0;
+#endif
+}
 
 bool colorEnabled() {
     if (gForcePlain) return false;
