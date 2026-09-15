@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iostream>
 #include <string>
+#include <utility>
 
 namespace rpg::combat {
 
@@ -42,7 +43,7 @@ struct EnemyBase {
     core::Element align;
 };
 
-constexpr std::array<EnemyBase, 12> kBestiary = {{
+constexpr std::array<EnemyBase, 18> kBestiary = {{
     { "Goblin",       1,  12,  5,  0,  5,  8, core::Element::None },
     { "Slime",        1,  14,  4,  0,  5,  7, core::Element::None },
     { "Skeleton",     2,  16,  6,  2,  5, 10, core::Element::None },
@@ -55,6 +56,12 @@ constexpr std::array<EnemyBase, 12> kBestiary = {{
     { "Demon",       16,  46, 14,  4,  8, 24, core::Element::None },
     { "Night Terror", 22,  60, 17,  6, 10, 30, core::Element::None },
     { "Dread Lord",   30,  78, 22,  8, 10, 38, core::Element::None },
+    { "Wight Lord",   36,  95, 26, 10, 10, 45, core::Element::Frost },
+    { "Magma Golem",  42, 115, 28, 12,  5, 48, core::Element::Fire },
+    { "Void Caller",  50, 130, 32, 12, 10, 55, core::Element::Arcane },
+    { "Bone Wraith",  55, 120, 30, 14, 12, 58, core::Element::None },
+    { "Doom Herald",  65, 160, 38, 16, 12, 70, core::Element::None },
+    { "Void Wraith",  78, 200, 44, 20, 14, 85, core::Element::Arcane },
 }};
 
 constexpr std::array<const char*, 10> kBossNames = {
@@ -221,6 +228,35 @@ Enemy makeBoss(int floor, core::Rng& rng, int aspect) {
     return e;
 }
 
+const char* biomeFor(int floor) {
+    static constexpr std::array<const char*, 12> kBiomes = {
+        "Crystal Shallows",    // 1-5
+        "Mossfall Depths",     // 6-10
+        "Hollow Warrens",      // 11-15
+        "Cinder Vault",        // 16-20
+        "Frostbound Fissure",  // 21-25
+        "Drowned Crypt",       // 26-30
+        "Ash Cathedral",       // 31-35
+        "Mire of Echoes",      // 36-40
+        "Basalt Maw",          // 41-45
+        "Shattered Twilight",  // 46-55
+        "Abyssal Shrine",      // 56-69
+        "The Endless Dark",    // 70+
+    };
+    if (floor <= 5)   return kBiomes[0];
+    if (floor <= 10)  return kBiomes[1];
+    if (floor <= 15)  return kBiomes[2];
+    if (floor <= 20)  return kBiomes[3];
+    if (floor <= 25)  return kBiomes[4];
+    if (floor <= 30)  return kBiomes[5];
+    if (floor <= 35)  return kBiomes[6];
+    if (floor <= 40)  return kBiomes[7];
+    if (floor <= 45)  return kBiomes[8];
+    if (floor <= 55)  return kBiomes[9];
+    if (floor <= 69)  return kBiomes[10];
+    return kBiomes[11];
+}
+
 // ---------------------------------------------------------------------------
 // fight
 // ---------------------------------------------------------------------------
@@ -351,7 +387,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
         std::vector<std::size_t> alive;
         for (std::size_t i = 0; i < enemies.size(); ++i)
             if (enemies[i].alive()) alive.push_back(i);
-        if (alive.size() <= 1) return alive[0];
+        if (alive.size() <= 1) return alive.empty() ? std::size_t(0) : alive[0];
         std::cout << ui::color(90, "  Targets:") << "\n";
         for (std::size_t k = 0; k < alive.size(); ++k) {
             const Enemy& e = enemies[alive[k]];
@@ -442,20 +478,35 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
             std::cout << ui::color(31, "They block your escape! You ready yourself.") << "\n";
             acted = true;
         } else if (kind == 'i') {
-            std::vector<int> pots;
-            for (std::size_t i = 0; i < vault.items.size(); ++i)
-                if (vault.items[i].isPot()) pots.push_back(static_cast<int>(i));
+            std::vector<std::pair<int, bool>> pots;   // item index, fromBelt
+            const auto addPot = [&](int idx, bool belt) {
+                if (idx < 0 || !vault.hasItem(idx)) return;
+                if (!vault.items[static_cast<std::size_t>(idx)].isPot()) return;
+                pots.push_back({ idx, belt });
+            };
+            addPot(vault.beltIndex(0), true);
+            addPot(vault.beltIndex(1), true);
+            for (std::size_t i = 0; i < vault.items.size(); ++i) {
+                if (!vault.items[i].isPot()) continue;
+                if (std::find_if(pots.begin(), pots.end(),
+                                 [&](const std::pair<int, bool>& p) {
+                                     return p.first == static_cast<int>(i);
+                                 }) != pots.end())
+                    continue;
+                pots.push_back({ static_cast<int>(i), false });
+            }
             if (pots.empty()) {
                 std::cout << ui::color(96, "  No potions!") << "\n";
             } else {
                 std::cout << ui::color(90, "  Potions:") << "\n";
                 for (std::size_t k = 0; k < pots.size(); ++k) {
-                    const Item& p = vault.items[static_cast<std::size_t>(pots[k])];
+                    const Item& p = vault.items[static_cast<std::size_t>(pots[k].first)];
                     std::cout << ui::color(96, "    [" + std::to_string(k + 1) + "] ")
+                              << (pots[k].second ? ui::color(33, ui::bold("(belt) ")) : "")
                               << ui::color(ui::rarityColor(p.rarity), p.describe()) << "\n";
                 }
                 const int pick = io::askInt("Use which?", 1, static_cast<int>(pots.size())) - 1;
-                const int vIdx = pots[static_cast<std::size_t>(pick)];
+                const int vIdx = pots[static_cast<std::size_t>(pick)].first;
                 const Item p = vault.items[static_cast<std::size_t>(vIdx)];
                 if (p.heal > 0) {
                     pc.healHp(p.heal, st.maxHp);
@@ -483,6 +534,14 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 std::cout << "\n";
             }
             const int pick = io::askInt("Cast which?", 1, 12);
+            if (!std::cin.good()) {
+                // EOF: fall back to a basic attack instead of spinning in "not learned".
+                const std::size_t tgt = chooseTarget();
+                Enemy& e = enemies[tgt];
+                const int dealt = dealAttack(pc, st, pb, e, eb[tgt], rng,
+                                             adrenaline, critExtra, /*compact=*/false);
+                if (dealt > 0) acted = true;
+            } else {
             const int idx = pick - 1;
             if (!tree[static_cast<std::size_t>(idx)]) {
                 std::cout << ui::dim("  Not learned.") << "\n";
@@ -536,6 +595,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                     std::cout << ui::color(96, "  " + s.name + "!") << "\n";
                 }
                 acted = true;
+            }
             }
         } else {  // basic attack
             const std::size_t tgt = chooseTarget();
@@ -657,7 +717,8 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
         res.loot.shards = (rng.chance(0.35) ? 1 : 0) + (rng.chance(0.10) ? 1 : 0);
         res.loot.essence = rng.chance(0.05) ? 1 : 0;
         res.loot.items = rollLoot(pc.currentFloor(), boss, rng);
-        res.loot.runes = rollRunestoneLoot(pc.currentFloor(), boss, rng);
+        res.loot.runes = rollRunestoneLoot(pc.currentFloor(), boss, rng,
+                                           vault.perks[static_cast<std::size_t>(PerkId::Runeforge)]);
         if (boss) {
             res.loot.shards += 2;
             res.loot.essence += 1;

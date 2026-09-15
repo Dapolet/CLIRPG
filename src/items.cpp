@@ -16,7 +16,7 @@ constexpr const char* kRarityNames[kNumRarities] = {
     "Common", "Uncommon", "Rare", "Epic", "Legendary",
 };
 constexpr const char* kSlotWords[kNumSlots] = {
-    "Weapon", "Armor", "Ring", "Amulet",
+    "Weapon", "Armor", "Ring", "Amulet", "Helm", "Gloves", "Boots",
 };
 constexpr const char* kWeaponBases[10] = {
     "Sword", "Axe", "Mace", "Dagger", "Warhammer",
@@ -25,6 +25,15 @@ constexpr const char* kWeaponBases[10] = {
 constexpr const char* kArmorBases[10] = {
     "Hauberk", "Plate", "Robe", "Leathers", "Vestments",
     "Brigandine", "Scale", "Gambeson", "Cuirass", "Greatcloak",
+};
+constexpr const char* kHelmBases[6] = {
+    "Helm", "Crown", "Skullcap", "Sallet", "Visor", "Circlet",
+};
+constexpr const char* kGlovesBases[6] = {
+    "Gauntlets", "Gloves", "Bracers", "Handwraps", "Splints", "Claws",
+};
+constexpr const char* kBootsBases[6] = {
+    "Sabatons", "Greaves", "Boots", "Treads", "Waders", "Sollerets",
 };
 constexpr const char* kTrinketBaseNames[2] = { "Ring", "Amulet" };
 constexpr const char* kTierNames[kNumTiers] = {
@@ -55,6 +64,14 @@ const std::vector<std::string> kWordsXp     = { "Insightful", "Scholarly", "Enli
 int slotIndex(Slot s) { return static_cast<int>(s); }
 const char* rarityName(Rarity r) { return kRarityNames[static_cast<int>(r)]; }
 const char* slotName(Slot s)     { return kSlotWords[static_cast<int>(s)]; }
+bool isDefenseSlot(Slot s) {
+    switch (s) {
+        case Slot::Armor: case Slot::Helm: case Slot::Gloves: case Slot::Boots:
+            return true;
+        default:
+            return false;
+    }
+}
 const char* tierName(ItemTier t) { return kTierNames[static_cast<int>(t)]; }
 const char* affixName(AffixType t) { return kAffixNames[static_cast<int>(t)]; }
 
@@ -141,11 +158,34 @@ const std::vector<PoolEntry>& poolFor(Slot s) {
         { AffixType::CritBonus,  8, 20, 1.00, &kWordsCritB  },
         { AffixType::MaxHp,      3,  7, 0.25, &kWordsHp     },
     };
+    static const std::vector<PoolEntry> helm = {
+        { AffixType::MaxHp,    3,  6, 0.30, &kWordsHp     },
+        { AffixType::Defense,  2,  5, 0.25, &kWordsDef    },
+        { AffixType::Regen,    1,  3, 0.05, &kWordsRegen  },
+        { AffixType::Mana,     4, 12, 0.60, &kWordsMana   },
+        { AffixType::XpGain,   2,  5, 0.10, &kWordsXp     },
+    };
+    static const std::vector<PoolEntry> gloves = {
+        { AffixType::CritChance, 1,  4, 0.05, &kWordsCritC  },
+        { AffixType::CritBonus,  6, 16, 0.80, &kWordsCritB  },
+        { AffixType::LifeSteal,  1,  3, 0.05, &kWordsLeech  },
+        { AffixType::Defense,    2,  5, 0.25, &kWordsDef    },
+    };
+    static const std::vector<PoolEntry> boots = {
+        { AffixType::Defense,    2,  6, 0.25, &kWordsDef    },
+        { AffixType::Regen,      1,  3, 0.05, &kWordsRegen  },
+        { AffixType::ManaRegen,  1,  3, 0.05, &kWordsManReg },
+        { AffixType::MaxHp,      3,  6, 0.30, &kWordsHp     },
+        { AffixType::XpGain,     2,  5, 0.10, &kWordsXp     },
+    };
     switch (s) {
         case Slot::Weapon: return weapon;
         case Slot::Armor:  return armor;
         case Slot::Ring:   return ring;
         case Slot::Amulet: return amulet;
+        case Slot::Helm:   return helm;
+        case Slot::Gloves: return gloves;
+        case Slot::Boots:  return boots;
     }
     return weapon;
 }
@@ -273,9 +313,17 @@ bool Vault::hasItem(int idx) const {
 void Vault::clear() {
     gold = shards = essence = 0;
     items.clear();
-    equipped = { -1, -1, -1, -1 };
+    equipped = { -1, -1, -1, -1, -1, -1, -1 };
     belt = { -1, -1 };
     loadouts = {};
+    bestFloor = 1;
+    bossesSlain = kills = deaths = legendaryFound = 0;
+    mastery = aspect = 0;
+    totalGoldEarned = 0;
+    nextUid = 1;
+    runes.clear();
+    perks = {};
+    bestiary = Bestiary{};
 }
 
 int setPieces(const Vault& vault, SetId s) {
@@ -366,7 +414,14 @@ const char* gearBase(const Item& it) {
                        + it.iLvl * 5 + it.power;
         return kArmorBases[seed % 10];
     }
-    return kTrinketBaseNames[slotIndex(it.slot) - 2];
+    const int seed = static_cast<int>(it.tier) * 13 + static_cast<int>(it.rarity) * 7
+                   + it.iLvl * 5 + it.power;
+    switch (it.slot) {
+        case Slot::Helm:   return kHelmBases[seed % 6];
+        case Slot::Gloves: return kGlovesBases[seed % 6];
+        case Slot::Boots:  return kBootsBases[seed % 6];
+        default:           return kTrinketBaseNames[slotIndex(it.slot) - 2];
+    }
 }
 
 void refreshName(Item& it) {
@@ -422,11 +477,11 @@ Item makeGear(int floor, core::Rng& rng, Rarity minRarity) {
     const int gap = std::min(floor / 4, 6);
     it.iLvl   = std::max(1, floor - rng.roll(0, gap));
 
-    const int s = rng.roll(0, 3);
+    const int s = rng.roll(0, kNumSlots - 1);
     it.slot = static_cast<Slot>(s);
     if (it.slot == Slot::Weapon)
         it.power = baseTierPower(it.tier, true) + static_cast<int>(1.2 * static_cast<double>(it.iLvl - 1));
-    else if (it.slot == Slot::Armor)
+    else if (isDefenseSlot(it.slot))
         it.power = baseTierPower(it.tier, false) + static_cast<int>(0.8 * static_cast<double>(it.iLvl - 1));
     else
         it.power = 0;
@@ -450,14 +505,16 @@ Rune makeRune(int floor, core::Rng& rng) {
     return r;
 }
 
-std::vector<Rune> rollRunestoneLoot(int floor, bool boss, core::Rng& rng) {
+std::vector<Rune> rollRunestoneLoot(int floor, bool boss, core::Rng& rng, bool boosted) {
     std::vector<Rune> out;
     if (boss) {
         out.push_back(makeRune(floor, rng));
+        if (boosted) out.push_back(makeRune(floor, rng));
         return out;
     }
     const double rate = std::min(0.03 + 0.004 * static_cast<double>(floor), 0.25);
     if (rng.chance(rate)) out.push_back(makeRune(floor, rng));
+    if (boosted && rng.chance(rate)) out.push_back(makeRune(floor, rng));
     return out;
 }
 
@@ -487,8 +544,7 @@ bool canUpgrade(const Item& it, int floor) {
 void upgrade(Item& it) {
     if (it.isPot()) return;
     ++it.iLvl;
-    if (it.slot == Slot::Weapon) it.power += 1;
-    else if (it.slot == Slot::Armor) it.power += 1;
+    if (it.slot == Slot::Weapon || isDefenseSlot(it.slot)) it.power += 1;
 }
 
 void reforge(Item& it, core::Rng& rng) {

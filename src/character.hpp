@@ -55,6 +55,7 @@ struct EffectiveStats {
     int manaRegenPerTurn = 0;
     int lifeStealPct = 0;
     int xpGainPct = 0;
+    int goldGainPct = 0;
 };
 
 class Character {

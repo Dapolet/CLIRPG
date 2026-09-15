@@ -235,7 +235,7 @@ EffectiveStats Character::stats(const Vault& vault) const {
         if (!vault.hasItem(e)) continue;
         const Item& it = vault.items[static_cast<std::size_t>(e)];
         if (it.slot == Slot::Weapon) s.attack += it.power;
-        else if (it.slot == Slot::Armor) s.defense += it.power;
+        else if (isDefenseSlot(it.slot)) s.defense += it.power;
         for (const auto& a : it.affixes) {
             switch (a.type) {
                 case AffixType::DamagePct:   dmgPct += a.value; break;
@@ -271,6 +271,7 @@ EffectiveStats Character::stats(const Vault& vault) const {
     if (vault.perks[static_cast<std::size_t>(PerkId::Vitals)])   s.maxHp += s.maxHp * 8 / 100;
     if (vault.perks[static_cast<std::size_t>(PerkId::Leeching)]) s.lifeStealPct += 2;
     if (vault.perks[static_cast<std::size_t>(PerkId::Bulwark)])  s.defense += 6;
+    if (vault.perks[static_cast<std::size_t>(PerkId::Heirloom)]) s.goldGainPct += 20;
 
     // Set bonuses (2-piece / 3-piece)
     const int titanic  = setPieces(vault, SetId::Titanic);

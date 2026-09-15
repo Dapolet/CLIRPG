@@ -185,6 +185,7 @@ bool write(const std::string& path, const Character& pc, Vault& vault) {
 }
 
 bool read(const std::string& path, Character* pc, Vault* vault) {
+    try {
     std::ifstream f(path);
     if (!f) return false;
     std::ostringstream all;
@@ -273,6 +274,9 @@ bool read(const std::string& path, Character* pc, Vault* vault) {
     pc->restore(snap);
     *vault = v;
     return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 SaveSummary peek(const std::string& path) {

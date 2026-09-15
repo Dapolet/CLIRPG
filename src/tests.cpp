@@ -1,6 +1,7 @@
 #include "character.hpp"
 #include "combat.hpp"
 #include "core.hpp"
+#include "game.hpp"
 #include "items.hpp"
 #include "save.hpp"
 
@@ -822,6 +823,34 @@ void testVendorPotion() {
     }
 }
 
+void testQuitSaveFlush() {
+    // 1.1 regression: quitting the camp persists the floor just cleared.
+    // game::adventure covers its own writes when no callback is supplied.
+    core::Rng rng(99);
+    Character pc(ClassId::Warrior);
+    Vault v;
+    v.clear();
+    v.gold = 50;
+    const std::string path = "test_quit_save.rpg";
+    std::remove(path.c_str());
+
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    std::istringstream in("a\n0\n");   // auto-attack the fight, then quit camp
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    game::adventure(pc, v, rng, path, {});
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut);
+
+    CHECK(v.gold > 50, "floor rewards kept across camp quit");
+    Character pc2(ClassId::Warrior);
+    Vault v2;
+    CHECK(save::read(path, &pc2, &v2) && v2.kills > 0, "quit-save flushed fight record to disk");
+    CHECK(v.kills == v2.kills, "in-memory and flushed kill counts agree");
+    std::remove(path.c_str());
+}
+
 } // namespace
 
 int main() {
@@ -857,6 +886,7 @@ int main() {
     testDotExpiry();
     testXpAppliedOnce();
     testVendorPotion();
+    testQuitSaveFlush();
 
     std::cout << "\n" << checks << " checks, " << failures << " failures\n";
     return failures == 0 ? 0 : 1;

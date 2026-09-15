@@ -39,9 +39,10 @@ void setForcePlain(bool plain);                // --plain / tests
 std::string stripAnsi(const std::string& text);
 std::string center(const std::string& text, int width);
 
-void printHeader();
-
 enum class CampResult { Descend, Quit, Ascend };
+
+// Random pre-fight floor event (fountain, cache, rune-fall, trap, apothecary).
+void floorEvent(Character& pc, Vault& vault, int floor, core::Rng& rng);
 
 // main menu: returns 1 new / 2 continue / 3 quit
 int mainMenu();
@@ -53,6 +54,9 @@ void saveSlotsList();
 // new-game class select
 ClassId chooseClass();
 
+// pick one Rift Aspect perk (once per Ascension, permanent).
+void choosePerk(Vault& vault);
+
 // full camp loop. Descend / Quit / Ascend (Rift Aspect, floor 100+).
 CampResult camp(Character& pc, Vault& vault, core::Rng& rng);
 
@@ -62,5 +66,7 @@ void showVault(const Vault& vault);
 void equipMenu(Character& pc, Vault& vault);
 void spellBook(const Character& pc);
 void recordsScreen(const Character& pc, const Vault& vault);
+void manageMenu(Character& pc, Vault& vault);
+void beltMenu(Vault& vault);
 
 } // namespace rpg::ui

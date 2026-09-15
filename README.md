@@ -2,7 +2,7 @@
 
 > **A terminal dungeon-crawler roguelike written in C++20 — no external libraries, no engine, just `make`.**
 
-Descend an endless rift, clear floors, hoard loot, and push your build to the limit. Pure TTY flavor with a colorful themed UI (ANSI true-color) that degrades gracefully to plain ASCII in pipes, tests, and CI.
+Descend an endless rift, clear floors, hoard loot, and push your build to the limit. Pure TTY flavor with a colorful themed UI (16-color ANSI) that degrades gracefully to plain ASCII in pipes, tests, and CI.
 
 ![Badge: C++20](https://img.shields.io/badge/C%2B%2B-20-blue) ![Badge: no-deps](https://img.shields.io/badge/dependencies-none-brightgreen) ![Badge: tests](https://img.shields.io/badge/tests-12%2C782%20checks-success) ![Badge: platform](https://img.shields.io/badge/macOS-Linux-Windows-brightgreen)
 
@@ -16,7 +16,7 @@ Descend an endless rift, clear floors, hoard loot, and push your build to the li
 - 🔨 **Blacksmith** — upgrade, reroll (reforge), awaken, socket & extract runestones.
 - 🏪 **Merchant** — buy potions, sell & salvage gear, rune economy.
 - 🪙 **4-currency economy** — gold, shards, essence, runestones.
-- 💾 **Robust save system** — versioned `RPGSAVE v6`, checksummed, per-slot (`save1-3.rpg`), death-penalty roguelike rules.
+- 💾 **Robust save system** — versioned `RPGSAVE v7`, checksummed, per-slot (`save1-3.rpg`), death-penalty roguelike rules.
 - 📖 **Living bestiary & achievements** — kill records by name, boss kills, affix/biome logs, and an achievements wall.
 - 🧪 **Tested hard** — 12,782 checks, ASan + UBSan-clean, MSYS2 GCC Windows CI gate.
 - 🌈 **Plain mode** — full ANSI when you're on a TTY; clean ASCII in pipes / `NO_COLOR` / `--plain`.

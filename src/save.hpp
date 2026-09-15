@@ -7,7 +7,7 @@
 
 namespace rpg::save {
 
-constexpr int kVersion = 6;
+constexpr int kVersion = 7;
 
 bool write(const std::string& path, const Character& pc, Vault& vault);
 bool read(const std::string& path, Character* pc, Vault* vault);

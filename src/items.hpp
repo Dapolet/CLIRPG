@@ -10,7 +10,7 @@
 namespace rpg {
 
 enum class Rarity      { Common, Uncommon, Rare, Epic, Legendary };
-enum class Slot        { Weapon, Armor, Ring, Amulet };
+enum class Slot        { Weapon, Armor, Ring, Amulet, Helm, Gloves, Boots };
 enum class ItemTier    { Iron, Steel, Mythril, Adamant, Void };
 enum class AffixType   {
     DamagePct, CritChance, CritBonus, LifeSteal,
@@ -24,7 +24,7 @@ enum class SetId       { None, Titanic, Infernal, Frostbound, Voidwalk, kNumSets
 // Rift Aspect perks — permanent, chosen once per Ascension.
 enum class PerkId      { Heirloom, Runeforge, Insight, Vitals, Leeching, Bulwark, kNumPerks };
 
-constexpr int kNumSlots  = 4;
+constexpr int kNumSlots  = 7;
 constexpr int kNumRarities = 5;
 constexpr int kNumTiers  = 5;
 constexpr int kNumAffixTypes = 10;
@@ -32,6 +32,7 @@ constexpr int kNumAffixTypes = 10;
 int        slotIndex(Slot s);
 const char* rarityName(Rarity r);
 const char* slotName(Slot s);
+bool        isDefenseSlot(Slot s);           // Armor, Helm, Gloves, Boots
 const char* tierName(ItemTier t);
 const char* affixName(AffixType t);
 const char* runeName(RuneType t);
@@ -106,7 +107,7 @@ struct Vault {
     std::int64_t saveTime = 0;
 
     std::vector<Item> items;                    // bag + equipped together
-    std::array<int, kNumSlots> equipped = { -1, -1, -1, -1 };  // index into items, -1 = empty
+    std::array<int, kNumSlots> equipped = { -1, -1, -1, -1, -1, -1, -1 };  // index into items, -1 = empty
     std::vector<Rune> runes;                    // unbound runestones
     std::array<int, 2> belt = { -1, -1 };       // potion item uids (quick slots)
     std::array<std::array<int, kNumSlots>, 2> loadouts{};  // uid per slot per loadout
@@ -135,7 +136,7 @@ Item            makeVendorPotion(int pact, bool mana);
 Item            makeGear(int floor, core::Rng& rng, Rarity minRarity = Rarity::Common);
 std::vector<Item> rollLoot(int floor, bool boss, core::Rng& rng);
 Rune            makeRune(int floor, core::Rng& rng);
-std::vector<Rune> rollRunestoneLoot(int floor, bool boss, core::Rng& rng);
+std::vector<Rune> rollRunestoneLoot(int floor, bool boss, core::Rng& rng, bool boosted = false);
 
 // --- blacksmith ---
 bool canUpgrade(const Item& it, int floor);
