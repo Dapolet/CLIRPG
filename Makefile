@@ -14,6 +14,15 @@ else
     EXE_EXT :=
 endif
 
+# Windows release builds: statically link the runtime so the distributed .exe
+# needs no MSYS2 DLLs (libgcc_s_seh-1.dll / libstdc++-6.dll /
+# libwinpthread-1.dll). macOS/Linux keep dynamic linking.
+ifeq ($(OS),Windows_NT)
+    STATIC_LDFLAGS := -static
+else
+    STATIC_LDFLAGS :=
+endif
+
 # Sources live in src/; objects + binaries land in build/.
 MAIN      := main.cpp
 GAME      := game.cpp ui.cpp combat.cpp character.cpp items.cpp save.cpp glory.cpp io.cpp core.cpp
@@ -37,7 +46,7 @@ CAS_TST   := $(BUILD)/tests_asan$(EXE_EXT)
 all: $(RPG)
 
 $(RPG): $(GAMEOBJS) $(MAINOBJ)
-	$(CXX) $(COMMON) $^ -o $@
+	$(CXX) $(COMMON) $(STATIC_LDFLAGS) $^ -o $@
 
 $(BUILD)/%.o: $(SRC)/%.cpp
 	@mkdir -p $(BUILD)
