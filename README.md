@@ -37,8 +37,8 @@ Victory! +8 XP, +12 gold
 
 ### ⚔️ Combat
 
-- **Turn-based fights** — attack, cast, potions (belt quick-keys `1`/`2` for an instant sip), and flee (75%). Potions **stack** and **scale with your floor** (55+22·floor HP / 45+14·floor mana). Every hit lands, capped at **60% of your max HP** so nothing can one-shot you. Status effects: Burn, Bleed, Poison, Stun, plus the boss's deadly Thrall summon.
-- **3 classes · 12-spell trees** — Warrior, Mage, Rogue; each tree has depth-4 capstone spells, Element-tagged casters (🔥 Fire, ❄️ Frost, ✨ Arcane), and **Enfeeble / Vulnerable** debuffs. In combat you pick from your *learned* spells (`0` backs out).
+- **Turn-based fights** — attack, cast, potions (belt quick-keys `1`/`2` for an instant sip), and flee (75%). Potions **stack** and **scale with your floor** (55+22·floor HP / 45+14·floor mana). Every hit lands, capped at **60% of your max HP** so nothing can one-shot you. Status effects: Burn, Bleed, Poison, Stun, plus the boss's deadly Thrall summon. Opening a combat menu (potions/spells/help) and backing out costs **no turn and no enemy attack**.
+- **3 classes · 12-spell trees** — Warrior, Mage, Rogue; each tree has depth-4 capstone spells, Element-tagged casters (🔥 Fire, ❄️ Frost, ✨ Arcane), and **Enfeeble / Vulnerable** debuffs. The spell book & trainer use `<rank> <branch>` codes (`1 1` Backstab, `2 1` Vanish, `2 2` Corrosive Slash), and spell damage **scales with floor** on top of level, so casters stay relevant in deep descents. In combat you pick from your *learned* spells (`0` backs out).
 - **Passive training** — at camp, dump spare skill points into permanent rows (Might +3 ATK, Vitality +10 HP, Focus +3 res, Tenacity +1 DEF, Fleetness +1 regen per rank, 5 ranks each).
 
 ### 📈 Progression

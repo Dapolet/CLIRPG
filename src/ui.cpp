@@ -681,16 +681,22 @@ void spellBook(const Character& pc) {
     panelTop(std::string("Spell tree \u2014 ") + std::to_string(pc.skillPoints()) + " points", c::mana);
     for (int b = 0; b < 3; ++b) {
         panelLine(color(c::gold, bold(branchName(pc.classId(), b))));
-        for (int i = b; i < 12; i += 4) {
+        for (int i = b * 4; i < b * 4 + 4; ++i) {
             const Spell& s = spells[static_cast<std::size_t>(i)];
             const bool learned = tree[static_cast<std::size_t>(i)];
+            const std::string codeStr = std::to_string((i % 4) + 1) + " "
+                                      + std::to_string(b + 1);
             if (learned) {
                 const std::string glyStr = gly(G_MED);
-                const int headLen = 3 + static_cast<int>(glyStr.size()) + 1
+                const int headLen = 3 + static_cast<int>(codeStr.size()) + 1
+                                    + static_cast<int>(glyStr.size()) + 1
                                     + static_cast<int>(s.name.size());
                 const int budget = std::max(layoutWidth() - 2 - headLen, 4);
-                const std::string head = "   " + color(c::gold, glyStr + " " + s.name);
-                const std::string wrapped = wrap(" \u2014 " + spellBlurb(s, pc.level()), budget);
+                const std::string head = "   " + color(c::accent, codeStr) + " "
+                                       + color(c::gold, glyStr + " " + s.name);
+                const std::string wrapped = wrap(" \u2014 "
+                                                 + spellBlurb(s, pc.level(), pc.currentFloor()),
+                                                 budget);
                 const std::string pad(std::size_t(headLen), ' ');
                 std::size_t pos = 0;
                 while (true) {
@@ -705,7 +711,9 @@ void spellBook(const Character& pc) {
             } else {
                 const bool trainable = (i % 4 == 0) ||
                                        tree[static_cast<std::size_t>(i - 1)];
-                panelLine(dim(std::string(gly(G_SK)) + " " + s.name)
+                panelLine(dim(std::string(gly(G_SK)) + " ")
+                          + color(c::accent, codeStr)
+                          + dim(" " + s.name)
                           + " " + color(c::soft, "[" + std::to_string((i % 4) + 1) + "pt]")
                           + (trainable ? std::string() : dim("  locked")));
             }
@@ -766,7 +774,7 @@ bool passiveTrain(Character& pc) {
 bool spellTrainer(Character& pc) {
     while (true) {
         spellBook(pc);
-        std::cout << "  " << dim("Learn: ") << color(c::accent, "'<branch> <depth>'") << dim(", e.g. ")
+        std::cout << "  " << dim("Learn: ") << color(c::accent, "'<rank> <branch>'") << dim(", e.g. ")
                   << color(c::accent, "1 1") << dim("   ") << color(c::accent, "<P>") << dim(" passives")
                   << dim("   ") << color(c::accent, "<0>") << dim(" exit\n");
         std::string line;
@@ -774,13 +782,13 @@ bool spellTrainer(Character& pc) {
         if (line.empty()) continue;
         if (line[0] == '0') return false;
         if (line[0] == 'p' || line[0] == 'P') { passiveTrain(pc); continue; }
-        int b = 0, d = 0;
-        if (std::sscanf(line.c_str(), "%d %d", &b, &d) != 2) continue;
-        if (b < 1 || b > 3 || d < 1 || d > 4) continue;
-        const Spell& s = pc.spell(b - 1, d - 1);
-        if (pc.spendPoint(b - 1, d - 1)) {
+        int r = 0, b = 0;
+        if (std::sscanf(line.c_str(), "%d %d", &r, &b) != 2) continue;
+        if (r < 1 || r > 4 || b < 1 || b > 3) continue;
+        const Spell& s = pc.spell(b - 1, r - 1);
+        if (pc.spendPoint(b - 1, r - 1)) {
             panelLine(color(c::mana, gly(G_DI)) + " Learned " + s.name
-                      + color(c::soft, "  — " + spellBlurb(s, pc.level())));
+                      + color(c::soft, "  \u2014 " + spellBlurb(s, pc.level(), pc.currentFloor())));
             std::cout << "\n";
         } else {
             std::cout << dim("  Can't learn that (prerequisites or points).\n");

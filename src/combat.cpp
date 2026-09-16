@@ -332,7 +332,7 @@ int dealSpell(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
               int& adrenaline, int critExtra) {
     const int ei = mitigatedDef(e, eb);
     const double element = core::elementMult(s.element, e.align);
-    double base = static_cast<double>(spellDamage(s, pc.level())) *
+    double base = static_cast<double>(spellDamage(s, pc.level(), pc.currentFloor())) *
                   (1.0 + static_cast<double>(st.attack) / 100.0) * element;
     int rage = 0;
     if (hasStatus(pb, core::StatusEffect::Rage, &rage))
@@ -386,6 +386,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
     bool bossSummoned = false;
     int adrenaline = 0;
     int roundNum = 0;
+    bool roundStarted = false;
 
     const auto anyAlive = [&enemies]() {
         for (const auto& e : enemies) if (e.alive()) return true;
@@ -409,31 +410,37 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
     };
 
     while (pc.alive() && anyAlive()) {
-        // first round: record which affixes we are up against (bestiary)
-        if (roundNum == 0) {
-            for (const auto& e : enemies)
-                if (e.alive())
-                    for (const auto a : e.affixes)
-                        if (a != EnemyAffix::None)
-                            vault.bestiary.addAffix(std::string(enemyAffixName(a)));
-        }
-        ++roundNum;
-        const int critExtra = pc.classId() == ClassId::Rogue && roundNum == 1 ? 25 : 0;
-        // -- start of round: enemy dots --
-        for (std::size_t i = 0; i < enemies.size(); ++i) {
-            if (!enemies[i].alive()) continue;
-            for (auto it = eb[i].begin(); it != eb[i].end();) {
-                if (!isDot(*it) || it->power <= 0) { ++it; continue; }
-                enemies[i].hp = std::max(0, enemies[i].hp - it->power);
-                std::cout << ui::color(ui::c::bad, "  " + std::string(core::statusName(it->eff))
-                          + " bites " + enemies[i].name + " for " + std::to_string(it->power))
-                          << ".\n";
-                if (--it->turns <= 0) it = eb[i].erase(it);
-                else ++it;
+        // A fresh round: record the affix log once (before the first action) and
+        // run the start-of-round ticks. Cancelling a menu keeps this block from
+        // re-running, so nothing is ever lost to a cancel.
+        if (!roundStarted) {
+            if (roundNum == 0) {
+                for (const auto& e : enemies)
+                    if (e.alive())
+                        for (const auto a : e.affixes)
+                            if (a != EnemyAffix::None)
+                                vault.bestiary.addAffix(std::string(enemyAffixName(a)));
             }
+            // cooldown tick
+            for (auto& c : cd) c = std::max(0, c - 1);
+            // -- start of round: enemy dots --
+            for (std::size_t i = 0; i < enemies.size(); ++i) {
+                if (!enemies[i].alive()) continue;
+                for (auto it = eb[i].begin(); it != eb[i].end();) {
+                    if (!isDot(*it) || it->power <= 0) { ++it; continue; }
+                    enemies[i].hp = std::max(0, enemies[i].hp - it->power);
+                    std::cout << ui::color(ui::c::bad, "  " + std::string(core::statusName(it->eff))
+                              + " bites " + enemies[i].name + " for " + std::to_string(it->power))
+                              << ".\n";
+                    if (--it->turns <= 0) it = eb[i].erase(it);
+                    else ++it;
+                }
+            }
+            roundStarted = true;
         }
+        const int critExtra = pc.classId() == ClassId::Rogue && roundNum == 0 ? 25 : 0;
 
-        ui::panelTop("Round " + std::to_string(roundNum) + "  ·  L"
+        ui::panelTop("Round " + std::to_string(roundNum + 1) + "  ·  L"
                      + std::to_string(pc.level()), 36);
         ui::panelLine("HP " + ui::hpMeter(pc.hp(), st.maxHp, 16)
                       + ui::dim(" " + std::to_string(pc.hp()) + "/" + std::to_string(st.maxHp))
@@ -458,9 +465,6 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
             ui::panelLine(ui::color(ui::c::bad, "Adrenaline x" + std::to_string(adrenaline)));
         ui::panelBottom();
         printEnemies(enemies);
-
-        // cooldown tick
-        for (auto& c : cd) c = std::max(0, c - 1);
 
         bool acted = false;
         char kind = 'a';
@@ -578,7 +582,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                     const Spell& s = spells[static_cast<std::size_t>(learned[k])];
                     std::cout << ui::color(ui::c::shine, ui::chip(static_cast<int>(k + 1)))
                               << ui::bold(s.name)
-                              << ui::dim("  " + spellBlurb(s, pc.level())
+                              << ui::dim("  " + spellBlurb(s, pc.level(), pc.currentFloor())
                                          + "  (cost " + std::to_string(s.cost)
                                          + ", cd " + std::to_string(s.cooldown) + ")");
                     if (cd[static_cast<std::size_t>(learned[k])] > 0)
@@ -654,7 +658,9 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                                          adrenaline, critExtra);
             if (dealt > 0) acted = true;
         }
-        (void)acted;
+        if (!acted) continue;      // cancel: no round advance, no ticks, no enemy phase
+        ++roundNum;
+        roundStarted = false;
 
         if (!pc.alive() || !anyAlive()) continue;
 

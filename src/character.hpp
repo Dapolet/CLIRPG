@@ -40,10 +40,10 @@ struct Spell {
 
 // 12 spells per class; index = branch * 4 + depth. Built once, cached.
 const std::vector<Spell>& classSpells(ClassId c);
-int spellDamage(const Spell& s, int level);
+int spellDamage(const Spell& s, int level, int floor);
 int spellHeal(const Spell& s, int level);
 int resourceRegenPerTurn(ClassId c);
-std::string spellBlurb(const Spell& s, int level);   // one-line effect summary
+std::string spellBlurb(const Spell& s, int level, int floor);   // one-line effect summary
 
 // Passive training: a permanent skill-point sink available at camp.
 enum class TrainId { Might, Vitality, Focus, Tenacity, Fleetness, kNumTrains };

@@ -141,8 +141,10 @@ const char* resourceName(ClassId c) {
     return "?";
 }
 
-int spellDamage(const Spell& s, int level) {
-    return std::max(1, s.potency + static_cast<int>(s.lvlScale * static_cast<double>(level)));
+int spellDamage(const Spell& s, int level, int floor) {
+    const double base = std::round(static_cast<double>(s.potency) +
+                                   s.lvlScale * static_cast<double>(level));
+    return std::max(1, static_cast<int>(base * core::enemyScale(floor)));
 }
 
 int spellHeal(const Spell& s, int level) {
@@ -153,8 +155,8 @@ int resourceRegenPerTurn(ClassId c) {
     return c == ClassId::Mage ? 2 : 1;
 }
 
-std::string spellBlurb(const Spell& s, int level) {
-    std::string out = s.name + " — ";
+std::string spellBlurb(const Spell& s, int level, int floor) {
+    std::string out;
     if (s.type == SpellType::Heal) {
         out += "heals " + std::to_string(spellHeal(s, level)) + " HP";
         if (s.buffAttack > 0)  out += ", +" + std::to_string(s.buffAttack) + "% ATK";
@@ -168,7 +170,7 @@ std::string spellBlurb(const Spell& s, int level) {
     } else {
         if (s.element != core::Element::None)
             out += std::string(core::elementName(s.element)) + " ";
-        out += std::to_string(spellDamage(s, level)) + " dmg";
+        out += std::to_string(spellDamage(s, level, floor)) + " dmg";
         if (s.hits > 1) out += " x" + std::to_string(s.hits);
         if (s.armorShred > 0)  out += ", shreds " + std::to_string(s.armorShred) + " DEF";
         if (s.stunChancePct > 0) out += ", " + std::to_string(s.stunChancePct) + "% stun";

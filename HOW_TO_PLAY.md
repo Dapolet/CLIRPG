@@ -136,6 +136,11 @@ active bonuses** (`Adrenaline x1`); each monster shows a name + HP bar.
 | `f` | Flee (next line: back to camp, nothing gained that fight). |
 | `h` | Help. |
 
+Opening any combat menu — potions, spells, help, or a belt slot that's empty — and
+leaving it without acting costs **nothing**: the round does not advance and the enemy
+does not attack. Only a real action (attack, spell cast, potion drunk, failed flee)
+commits your turn.
+
 ### Spellcasting
 
 - Spells cost **resource** (Stamina/Mana/Energy) and usually have a **cooldown**.
@@ -175,9 +180,11 @@ and feeds your vault records.
 
 ## Spells — full class trees
 
-Learn spells at the **Trainer** (camp 6) from the spell tree. Type `branch depth`, e.g.
-`1 1` = first rank of branch 1. Costs **skill points** (`depth + 1`: 1, 2, 3, 4); a rank
-is *locked* until the previous rank in the same branch is owned. `P` opens passives.
+Learn spells at the **Trainer** (camp 6) from the spell tree. Each branch is a column of
+ranked spells; enter `rank branch` — the two numbers shown on every row of the tree. E.g.
+`1 1` = rank 1 of branch 1 (your opening spell), `2 1` = rank 2 of branch 1 (Vanish),
+`2 2` = rank 2 of branch 2 (Corrosive Slash). Costs **skill points** (`rank`: 1, 2, 3, 4);
+a rank is *locked* until the previous rank in the same branch is owned. `P` opens passives.
 You start with 2 points and get 1 per level.
 
 ### Warrior
@@ -263,9 +270,11 @@ level 1.)*
 | 3 | Lethal Flourish | 7 res | 3 | 10-13 dmg x2, +80% crit self |
 | 4 | Masterstroke | 9 res | 4 | 9-12 dmg x3, +120% crit self |
 
-Spell damage = `potency + lvlScale x level`, so the numbers above are your L1 floor; as
-you level, everything hits harder. Crit-self multipliers stack with class crit bonus —
-a Rogue's Shadow/Tricks line is a crit machine.
+Spell damage = `max(1, round(potency + lvlScale x level) x enemyScale(floor))`, where
+`enemyScale(floor) = 1.07^(floor-1)` — the same curve enemies use for HP/attack. The
+numbers above are your Floor-1, level-1 values; as you level *and* descend, everything
+hits harder. Crit-self multipliers stack with class crit bonus — a Rogue's Shadow/Tricks
+line is a crit machine.
 
 ---
 
