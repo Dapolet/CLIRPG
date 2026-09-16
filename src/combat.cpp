@@ -141,13 +141,13 @@ void printEnemies(const std::vector<Enemy>& enemies) {
         line += ui::elementTag(e.align);
         if (e.align != core::Element::None) line += " ";
         line += ui::bold(e.name);
-        if (e.elite) line += ui::color(33, "  *elite*");
-        if (e.boss)  line += ui::color(31, ui::bold("  <BOSS>"));
+        if (e.elite) line += ui::color(ui::c::gold, "  *elite*");
+        if (e.boss)  line += ui::color(ui::c::bad, ui::bold("  <BOSS>"));
         line += " HP " + ui::hpMeter(e.hp, e.hpMax, 10);
         line += ui::dim(" " + std::to_string(e.hp) + "/" + std::to_string(e.hpMax));
-        if (e.defense > 0) line += ui::color(90, " DEF " + std::to_string(e.defense));
+        if (e.defense > 0) line += ui::color(ui::c::soft, " DEF " + std::to_string(e.defense));
         for (const auto a : e.affixes)
-            if (a != EnemyAffix::None) line += ui::color(35, " " + std::string(enemyAffixName(a)));
+            if (a != EnemyAffix::None) line += ui::color(ui::c::arcane, " " + std::string(enemyAffixName(a)));
         ui::panelLine(line);
     }
 }
@@ -228,6 +228,21 @@ Enemy makeBoss(int floor, core::Rng& rng, int aspect) {
     return e;
 }
 
+int biomeIndexFor(int floor) {
+    if (floor <= 5)   return 0;
+    if (floor <= 10)  return 1;
+    if (floor <= 15)  return 2;
+    if (floor <= 20)  return 3;
+    if (floor <= 25)  return 4;
+    if (floor <= 30)  return 5;
+    if (floor <= 35)  return 6;
+    if (floor <= 40)  return 7;
+    if (floor <= 45)  return 8;
+    if (floor <= 55)  return 9;
+    if (floor <= 69)  return 10;
+    return 11;
+}
+
 const char* biomeFor(int floor) {
     static constexpr std::array<const char*, 12> kBiomes = {
         "Crystal Shallows",    // 1-5
@@ -243,18 +258,25 @@ const char* biomeFor(int floor) {
         "Abyssal Shrine",      // 56-69
         "The Endless Dark",    // 70+
     };
-    if (floor <= 5)   return kBiomes[0];
-    if (floor <= 10)  return kBiomes[1];
-    if (floor <= 15)  return kBiomes[2];
-    if (floor <= 20)  return kBiomes[3];
-    if (floor <= 25)  return kBiomes[4];
-    if (floor <= 30)  return kBiomes[5];
-    if (floor <= 35)  return kBiomes[6];
-    if (floor <= 40)  return kBiomes[7];
-    if (floor <= 45)  return kBiomes[8];
-    if (floor <= 55)  return kBiomes[9];
-    if (floor <= 69)  return kBiomes[10];
-    return kBiomes[11];
+    return kBiomes[static_cast<std::size_t>(biomeIndexFor(floor))];
+}
+
+const char* biomeLoreFor(int floor) {
+    static constexpr std::array<const char*, 12> kLore = {
+        "Prismatic shards gleam in the shallows.",
+        "Moss-draped roots creak overhead in the dark.",
+        "Burrows chitter just beyond the torchlight.",
+        "Embers hiss as they drift from the vault roof.",
+        "Frozen chimes ring out across the fissure.",
+        "Water drips through drowned, echoing halls.",
+        "Ash sits in rows upon silent black pews.",
+        "Will-o'-wisps dance over the rotting mire.",
+        "Molten veins throb deep inside the basalt.",
+        "The light bends strangely; shadows recede.",
+        "A low chant hums from the black curtain.",
+        "There is no floor beneath the Endless Dark.",
+    };
+    return kLore[static_cast<std::size_t>(biomeIndexFor(floor))];
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +296,7 @@ double vulnMult(const std::vector<Timer>& eb) {
 }
 int dealAttack(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
                Enemy& e, std::vector<Timer>& eb, core::Rng& rng,
-               int& adrenaline, int critExtra, bool compact) {
+               int& adrenaline, int critExtra) {
     double dmg = static_cast<double>(st.attack) * (0.9 + 0.2 * rng.roll01());
     int rage = 0;
     if (hasStatus(pb, core::StatusEffect::Rage, &rage))
@@ -284,7 +306,7 @@ int dealAttack(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
         adrenaline = 0;
     }
     if (e.has(EnemyAffix::Ethereal) && rng.chance(0.25)) {
-        if (!compact) std::cout << "  " << e.name << " phases through your blade!\n";
+        std::cout << "  " << e.name << " phases through your blade!\n";
         return 0;
     }
     dmg = core::mitigate(dmg, mitigatedDef(e, eb));
@@ -293,19 +315,12 @@ int dealAttack(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
     dmg *= vulnMult(eb);
     const int dealt = std::max(1, static_cast<int>(dmg));
     e.hp = std::max(0, e.hp - dealt);
-    if (compact) {
-        std::cout << ui::color(96, std::string("\u2694 ") + e.name)
-                  << " -" << dealt << " (" << e.hp << "/" << e.hpMax << ")"
-                  << (e.alive() ? "" : ui::color(32, "  <defeated>"))
-                  << "\n";
-    } else {
-        std::cout << ui::bold("  You strike ") << e.name
-                  << ui::color(33, " for " + std::to_string(dealt) + " damage") << ".\n";
-    }
+    std::cout << ui::bold("  You strike ") << e.name
+              << ui::color(ui::c::gold, " for " + std::to_string(dealt) + " damage") << ".\n";
     if (st.lifeStealPct > 0) {
         const int steal = dealt * st.lifeStealPct / 100;
         pc.healHp(steal, st.maxHp);
-        if (!compact) std::cout << ui::color(96, "  (+" + std::to_string(steal) + " lifesteal)") << "\n";
+        std::cout << ui::color(ui::c::shine, "  (+" + std::to_string(steal) + " lifesteal)") << "\n";
     }
     if (e.has(EnemyAffix::Cursed)) pc.takeDamage(dealt * 35 / 100);
     return dealt;
@@ -330,7 +345,7 @@ int dealSpell(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
     for (int h = 0; h < s.hits; ++h) {
         double dmg = base * (0.9 + 0.2 * rng.roll01());
         if (e.has(EnemyAffix::Ethereal) && rng.chance(0.25)) {
-            std::cout << ui::color(94, "  " + e.name + " phases through the spell!") << "\n";
+            std::cout << ui::color(ui::c::frost, "  " + e.name + " phases through the spell!") << "\n";
             continue;
         }
         dmg = core::mitigate(dmg, ei);
@@ -345,13 +360,13 @@ int dealSpell(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
         std::cout << ui::bold("  " + s.name);
         if (s.element != core::Element::None && e.align != core::Element::None) {
             if (element == 1.3)
-                std::cout << ui::color(33, ui::bold(" CRUSHES the ")
+                std::cout << ui::color(ui::c::gold, ui::bold(" CRUSHES the ")
                           + std::string(core::elementName(e.align)) + " foe");
             else if (element == 0.7)
-                std::cout << ui::color(94, " fizzles against the "
+                std::cout << ui::color(ui::c::frost, " fizzles against the "
                           + std::string(core::elementName(e.align)) + " foe");
         }
-        std::cout << ui::color(33, " for " + std::to_string(total) + " damage") << ".\n";
+        std::cout << ui::color(ui::c::gold, " for " + std::to_string(total) + " damage") << ".\n";
         if (st.lifeStealPct > 0) pc.healHp(total * st.lifeStealPct / 100, st.maxHp);
         if (e.has(EnemyAffix::Cursed)) pc.takeDamage(total * 35 / 100);
     } else {
@@ -370,28 +385,22 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
     std::array<int, 12> cd{};
     bool bossSummoned = false;
     int adrenaline = 0;
-    bool autoActive = false;
     int roundNum = 0;
 
     const auto anyAlive = [&enemies]() {
         for (const auto& e : enemies) if (e.alive()) return true;
         return false;
     };
-    const auto firstAlive = [&enemies]() {
-        for (std::size_t i = 0; i < enemies.size(); ++i) if (enemies[i].alive()) return i;
-        return std::size_t(0);
-    };
-    // Manual multi-target selection (auto mode just hits the first alive foe).
-    const auto chooseTarget = [&enemies, &autoActive, &firstAlive]() {
-        if (autoActive) return firstAlive();
+    // Manual multi-target selection.
+    const auto chooseTarget = [&enemies]() {
         std::vector<std::size_t> alive;
         for (std::size_t i = 0; i < enemies.size(); ++i)
             if (enemies[i].alive()) alive.push_back(i);
         if (alive.size() <= 1) return alive.empty() ? std::size_t(0) : alive[0];
-        std::cout << ui::color(90, "  Targets:") << "\n";
+        std::cout << ui::color(ui::c::soft, "  Targets:") << "\n";
         for (std::size_t k = 0; k < alive.size(); ++k) {
             const Enemy& e = enemies[alive[k]];
-            std::cout << ui::color(96, "    [" + std::to_string(k + 1) + "] ") << e.name
+            std::cout << ui::color(ui::c::shine, "    [" + std::to_string(k + 1) + "] ") << e.name
                       << "  HP " << e.hp << "/" << e.hpMax << "\n";
         }
         const std::size_t pick = static_cast<std::size_t>(
@@ -416,7 +425,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
             for (auto it = eb[i].begin(); it != eb[i].end();) {
                 if (!isDot(*it) || it->power <= 0) { ++it; continue; }
                 enemies[i].hp = std::max(0, enemies[i].hp - it->power);
-                std::cout << ui::color(31, "  " + std::string(core::statusName(it->eff))
+                std::cout << ui::color(ui::c::bad, "  " + std::string(core::statusName(it->eff))
                           + " bites " + enemies[i].name + " for " + std::to_string(it->power))
                           << ".\n";
                 if (--it->turns <= 0) it = eb[i].erase(it);
@@ -429,13 +438,24 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
         ui::panelLine("HP " + ui::hpMeter(pc.hp(), st.maxHp, 16)
                       + ui::dim(" " + std::to_string(pc.hp()) + "/" + std::to_string(st.maxHp))
                       + "   " + std::string(resourceName(pc.classId())) + " "
-                      + ui::meter(pc.resource(), st.maxResource, 12, 34)
+                      + ui::meter(pc.resource(), st.maxResource, 12, ui::c::mana)
                       + ui::dim(" " + std::to_string(pc.resource()) + "/"
                                 + std::to_string(st.maxResource)));
+        {
+            std::string beltStr = "Belt:";
+            for (int s = 0; s < 2; ++s) {
+                const PotionKind k = vault.beltKind(s);
+                const int n = ui::potionCount(vault, k);
+                beltStr += "  " + std::string(ui::chip(s + 1)) + " ";
+                beltStr += n > 0 ? ui::color(ui::c::good, std::to_string(n) + "x")
+                                 : ui::dim("-");
+            }
+            ui::panelLine(beltStr);
+        }
         if (!timerList(pb).empty())
             ui::panelLine(ui::dim("Buffs: ") + timerList(pb));
         if (pc.classId() == ClassId::Warrior && adrenaline > 0)
-            ui::panelLine(ui::color(31, "Adrenaline x" + std::to_string(adrenaline)));
+            ui::panelLine(ui::color(ui::c::bad, "Adrenaline x" + std::to_string(adrenaline)));
         ui::panelBottom();
         printEnemies(enemies);
 
@@ -444,164 +464,194 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
 
         bool acted = false;
         char kind = 'a';
-        if (!autoActive) {
-            const std::string cmd = io::readLine(
-                "[a]ttack [s]pell [i]tems [f]lee  (= auto) (h help) > ");
-            if (cmd.empty()) {
-                kind = 'a';
-            } else if (cmd[0] == '=') {
-                autoActive = true;
-                std::cout << ui::color(32, "Auto-attack ON (stops when it gets dangerous).") << "\n";
-                continue;
-            } else if (cmd[0] == 'h' || cmd[0] == '?') {
-                std::cout << ui::dim("  a = basic attack   s = cast a learned spell\n"
-                          "  i = use a potion   f = flee (75%)\n"
-                          "  = = toggle auto-attack   h = this help\n");
-                continue;
-            } else {
-                kind = cmd[0];
-            }
+        const std::string cmd = io::readLine(
+            "[a]ttack [s]pell [i]tems [f]lee (h help) > ");
+        if (cmd.empty()) {
+            kind = 'a';
+        } else if (cmd[0] == 'h' || cmd[0] == '?') {
+            std::cout << ui::dim("  a = basic attack   s = cast a learned spell\n"
+                      "  i = use a potion   f = flee (75%)\n"
+                      "  1/2 = drink that belt potion   h = this help\n");
+            continue;
+        } else {
+            kind = cmd[0];
         }
 
-        if (autoActive) {
-            Enemy& e = enemies[firstAlive()];
-            const int dealt = dealAttack(pc, st, pb, e, eb[firstAlive()], rng,
-                                         adrenaline, 0, /*compact=*/true);
-            if (dealt > 0) acted = true;
+        if (kind == '1' || kind == '2') {
+            const int slotNum = kind == '1' ? 0 : 1;
+            const PotionKind bk = vault.beltKind(slotNum);
+            const int vIdx = vault.beltIndex(slotNum);
+            if (bk == PotionKind::None || vIdx < 0) {
+                std::cout << ui::color(ui::c::shine, "  Belt slot " + std::to_string(slotNum + 1)
+                          + " has nothing to drink.") << "\n";
+            } else {
+                const Item p = vault.items[static_cast<std::size_t>(vIdx)];
+                const int h = potionHeal(p, pc.currentFloor());
+                const int m = potionMana(p, pc.currentFloor());
+                if (h > 0) {
+                    pc.healHp(h, st.maxHp);
+                    std::cout << "  Restored " << h << " HP.\n";
+                }
+                if (m > 0) {
+                    pc.restoreResource(m, st.maxResource);
+                    std::cout << "  Restored " << m << " "
+                              << resourceName(pc.classId()) << ".\n";
+                }
+                vault.usePotion(vIdx);
+                acted = true;
+            }
         } else if (kind == 'f') {
             if (rng.chance(0.75)) {
-                std::cout << ui::color(33, "You slip away from the fight.") << "\n";
+                std::cout << ui::color(ui::c::gold, "You slip away from the fight.") << "\n";
                 res.fled = true;
                 res.won = false;
                 return res;
             }
-            std::cout << ui::color(31, "They block your escape! You ready yourself.") << "\n";
+            std::cout << ui::color(ui::c::bad, "They block your escape! You ready yourself.") << "\n";
             acted = true;
         } else if (kind == 'i') {
-            std::vector<std::pair<int, bool>> pots;   // item index, fromBelt
+            struct PotOpt {
+                int idx;
+                bool belt;
+            };
+            std::vector<PotOpt> pots;
             const auto addPot = [&](int idx, bool belt) {
-                if (idx < 0 || !vault.hasItem(idx)) return;
-                if (!vault.items[static_cast<std::size_t>(idx)].isPot()) return;
-                pots.push_back({ idx, belt });
+                if (idx >= 0 && vault.hasItem(idx) &&
+                    vault.items[static_cast<std::size_t>(idx)].isPot())
+                    pots.push_back({ idx, belt });
             };
             addPot(vault.beltIndex(0), true);
             addPot(vault.beltIndex(1), true);
             for (std::size_t i = 0; i < vault.items.size(); ++i) {
                 if (!vault.items[i].isPot()) continue;
                 if (std::find_if(pots.begin(), pots.end(),
-                                 [&](const std::pair<int, bool>& p) {
-                                     return p.first == static_cast<int>(i);
+                                 [&](const PotOpt& p) {
+                                     return p.idx == static_cast<int>(i);
                                  }) != pots.end())
                     continue;
                 pots.push_back({ static_cast<int>(i), false });
             }
             if (pots.empty()) {
-                std::cout << ui::color(96, "  No potions!") << "\n";
+                std::cout << ui::color(ui::c::shine, "  No potions in the bag.") << "\n";
             } else {
-                std::cout << ui::color(90, "  Potions:") << "\n";
+                std::cout << ui::color(ui::c::soft, "  Potions:") << "\n";
                 for (std::size_t k = 0; k < pots.size(); ++k) {
-                    const Item& p = vault.items[static_cast<std::size_t>(pots[k].first)];
-                    std::cout << ui::color(96, "    [" + std::to_string(k + 1) + "] ")
-                              << (pots[k].second ? ui::color(33, ui::bold("(belt) ")) : "")
-                              << ui::color(ui::rarityColor(p.rarity), p.describe()) << "\n";
+                    const Item& p = vault.items[static_cast<std::size_t>(pots[k].idx)];
+                    std::cout << ui::color(ui::c::shine, ui::chip(static_cast<int>(k + 1)))
+                              << (pots[k].belt ? ui::color(ui::c::gold, ui::bold("(belt) ")) : "")
+                              << ui::color(ui::rarityColor(p.rarity),
+                                           p.describe(pc.currentFloor()))
+                              << "\n";
                 }
-                const int pick = io::askInt("Use which?", 1, static_cast<int>(pots.size())) - 1;
-                const int vIdx = pots[static_cast<std::size_t>(pick)].first;
-                const Item p = vault.items[static_cast<std::size_t>(vIdx)];
-                if (p.heal > 0) {
-                    pc.healHp(p.heal, st.maxHp);
-                    std::cout << "  Restored " << p.heal << " HP.\n";
+                std::cout << ui::dim(ui::chip(0) + "back") << "\n";
+                const int pick = io::askInt("Use which? (0 back)", 0,
+                                            static_cast<int>(pots.size()));
+                if (pick > 0) {
+                    const int vIdx = pots[static_cast<std::size_t>(pick - 1)].idx;
+                    const Item p = vault.items[static_cast<std::size_t>(vIdx)];
+                    const int h = potionHeal(p, pc.currentFloor());
+                    const int m = potionMana(p, pc.currentFloor());
+                    if (h > 0) {
+                        pc.healHp(h, st.maxHp);
+                        std::cout << "  Restored " << h << " HP.\n";
+                    }
+                    if (m > 0) {
+                        pc.restoreResource(m, st.maxResource);
+                        std::cout << "  Restored " << m << " "
+                                  << resourceName(pc.classId()) << ".\n";
+                    }
+                    vault.usePotion(vIdx);
+                    acted = true;
                 }
-                if (p.manaRestore > 0) {
-                    pc.restoreResource(p.manaRestore, st.maxResource);
-                    std::cout << "  Restored " << p.manaRestore << " " << resourceName(pc.classId()) << ".\n";
-                }
-                vault.removeAt(vIdx);
-                acted = true;
             }
         } else if (kind == 's') {
             const auto& spells = classSpells(pc.classId());
             const auto tree = pc.tree();
-            std::cout << ui::color(90, "  Spells:") << "\n";
-            for (int i = 0; i < 12; ++i) {
-                if (!tree[static_cast<std::size_t>(i)]) continue;
-                const Spell& s = spells[static_cast<std::size_t>(i)];
-                std::cout << ui::color(96, "    [" + std::to_string(i + 1) + "] ")
-                          << ui::bold(s.name) << ui::dim(" (cost " + std::to_string(s.cost)
-                          + ", cd " + std::to_string(s.cooldown) + ")");
-                if (cd[static_cast<std::size_t>(i)] > 0)
-                    std::cout << ui::color(31, "  [recharging " + std::to_string(cd[static_cast<std::size_t>(i)]) + "]");
-                std::cout << "\n";
-            }
-            const int pick = io::askInt("Cast which?", 1, 12);
-            if (!std::cin.good()) {
-                // EOF: fall back to a basic attack instead of spinning in "not learned".
-                const std::size_t tgt = chooseTarget();
-                Enemy& e = enemies[tgt];
-                const int dealt = dealAttack(pc, st, pb, e, eb[tgt], rng,
-                                             adrenaline, critExtra, /*compact=*/false);
-                if (dealt > 0) acted = true;
+            std::vector<int> learned;
+            for (int i = 0; i < 12; ++i)
+                if (tree[static_cast<std::size_t>(i)]) learned.push_back(i);
+            if (learned.empty()) {
+                std::cout << ui::dim("  You haven't learned any spells yet.") << "\n";
             } else {
-            const int idx = pick - 1;
-            if (!tree[static_cast<std::size_t>(idx)]) {
-                std::cout << ui::dim("  Not learned.") << "\n";
-            } else if (cd[static_cast<std::size_t>(idx)] > 0) {
-                std::cout << ui::color(31, "  Still recharging!") << "\n";
-            } else if (!pc.canCast(spells[static_cast<std::size_t>(idx)])) {
-                std::cout << ui::color(31, "  Not enough " + std::string(resourceName(pc.classId())) + ".") << "\n";
-            } else {
-                const Spell& s = spells[static_cast<std::size_t>(idx)];
-                pc.spendResource(s.cost);
-                cd[static_cast<std::size_t>(idx)] = s.cooldown;
-
-                if (s.type == SpellType::Heal) {
-                    const int h = spellHeal(s, pc.level());
-                    pc.healHp(h, st.maxHp);
-                    std::cout << ui::color(32, ui::bold("  " + s.name + " restores " + std::to_string(h) + " HP.")) << "\n";
+                std::cout << ui::color(ui::c::soft, "  Spells:") << "\n";
+                for (std::size_t k = 0; k < learned.size(); ++k) {
+                    const Spell& s = spells[static_cast<std::size_t>(learned[k])];
+                    std::cout << ui::color(ui::c::shine, ui::chip(static_cast<int>(k + 1)))
+                              << ui::bold(s.name)
+                              << ui::dim("  " + spellBlurb(s, pc.level())
+                                         + "  (cost " + std::to_string(s.cost)
+                                         + ", cd " + std::to_string(s.cooldown) + ")");
+                    if (cd[static_cast<std::size_t>(learned[k])] > 0)
+                        std::cout << ui::color(ui::c::bad, "  [recharging "
+                                  + std::to_string(cd[static_cast<std::size_t>(learned[k])])
+                                  + "]");
+                    std::cout << "\n";
                 }
-                if (s.buffAttack > 0 && s.buffTurns > 0)
-                    applyStatus(pb, core::StatusEffect::Rage, s.buffTurns, s.buffAttack);
-                if (s.buffDefense > 0 && s.buffTurns > 0)
-                    applyStatus(pb, core::StatusEffect::Guard, s.buffTurns, s.buffDefense);
-                if (s.effect == core::StatusEffect::Guard)
-                    applyStatus(pb, core::StatusEffect::Guard, s.effectTurns, 50);
-                if (s.effect == core::StatusEffect::Regeneration)
-                    applyStatus(pb, core::StatusEffect::Regeneration, s.effectTurns,
-                                std::max(1, st.maxHp / 12));
+                std::cout << ui::dim(ui::chip(0) + "back") << "\n";
+                const int pick = io::askInt("Cast which? (0 back)", 0,
+                                            static_cast<int>(learned.size()));
+                if (pick > 0) {
+                    const int idx = learned[static_cast<std::size_t>(pick - 1)];
+                    if (cd[static_cast<std::size_t>(idx)] > 0) {
+                        std::cout << ui::color(ui::c::bad, "  Still recharging!") << "\n";
+                    } else if (!pc.canCast(spells[static_cast<std::size_t>(idx)])) {
+                        std::cout << ui::color(ui::c::bad, "  Not enough "
+                                  + std::string(resourceName(pc.classId())) + ".") << "\n";
+                    } else {
+                        const Spell& s = spells[static_cast<std::size_t>(idx)];
+                        pc.spendResource(s.cost);
+                        cd[static_cast<std::size_t>(idx)] = s.cooldown;
 
-                if (s.potency > 0) {
-                    const std::size_t tgt = chooseTarget();
-                    Enemy& e = enemies[tgt];
-                    const int total = dealSpell(pc, st, pb, s, e, eb[tgt], rng,
-                                                adrenaline, critExtra);
-                    if (e.alive()) {
-                        if (s.effect == core::StatusEffect::Burn ||
-                            s.effect == core::StatusEffect::Bleed ||
-                            s.effect == core::StatusEffect::Poison)
-                            applyStatus(eb[tgt], s.effect, s.effectTurns,
-                                        std::max(2, total / 6));
-                        if (s.effect == core::StatusEffect::Slow)
-                            applyStatus(eb[tgt], core::StatusEffect::Slow, s.effectTurns, 0);
-                        if (s.armorShred > 0)
-                            applyStatus(eb[tgt], core::StatusEffect::ArmorShred, 3, s.armorShred);
-                        if (s.stunChancePct > 0 && rng.chance(s.stunChancePct / 100.0))
-                            applyStatus(eb[tgt], core::StatusEffect::Stun, 1, 0);
-                        if (s.enemyVulnPct > 0)
-                            applyStatus(eb[tgt], core::StatusEffect::Vulnerable, s.effectTurns, s.enemyVulnPct);
-                        if (s.enemyAtkDownPct > 0)
-                            applyStatus(eb[tgt], core::StatusEffect::Enfeeble, s.effectTurns, s.enemyAtkDownPct);
+                        if (s.type == SpellType::Heal) {
+                            const int h = spellHeal(s, pc.level());
+                            pc.healHp(h, st.maxHp);
+                            std::cout << ui::color(ui::c::good, ui::bold("  " + s.name
+                                      + " restores " + std::to_string(h) + " HP.")) << "\n";
+                        }
+                        if (s.buffAttack > 0 && s.buffTurns > 0)
+                            applyStatus(pb, core::StatusEffect::Rage, s.buffTurns, s.buffAttack);
+                        if (s.buffDefense > 0 && s.buffTurns > 0)
+                            applyStatus(pb, core::StatusEffect::Guard, s.buffTurns, s.buffDefense);
+                        if (s.effect == core::StatusEffect::Guard)
+                            applyStatus(pb, core::StatusEffect::Guard, s.effectTurns, 50);
+                        if (s.effect == core::StatusEffect::Regeneration)
+                            applyStatus(pb, core::StatusEffect::Regeneration, s.effectTurns,
+                                        std::max(1, st.maxHp / 12));
+
+                        if (s.potency > 0) {
+                            const std::size_t tgt = chooseTarget();
+                            Enemy& e = enemies[tgt];
+                            const int total = dealSpell(pc, st, pb, s, e, eb[tgt], rng,
+                                                        adrenaline, critExtra);
+                            if (e.alive()) {
+                                if (s.effect == core::StatusEffect::Burn ||
+                                    s.effect == core::StatusEffect::Bleed ||
+                                    s.effect == core::StatusEffect::Poison)
+                                    applyStatus(eb[tgt], s.effect, s.effectTurns,
+                                                std::max(2, total / 6));
+                                if (s.effect == core::StatusEffect::Slow)
+                                    applyStatus(eb[tgt], core::StatusEffect::Slow, s.effectTurns, 0);
+                                if (s.armorShred > 0)
+                                    applyStatus(eb[tgt], core::StatusEffect::ArmorShred, 3, s.armorShred);
+                                if (s.stunChancePct > 0 && rng.chance(s.stunChancePct / 100.0))
+                                    applyStatus(eb[tgt], core::StatusEffect::Stun, 1, 0);
+                                if (s.enemyVulnPct > 0)
+                                    applyStatus(eb[tgt], core::StatusEffect::Vulnerable, s.effectTurns, s.enemyVulnPct);
+                                if (s.enemyAtkDownPct > 0)
+                                    applyStatus(eb[tgt], core::StatusEffect::Enfeeble, s.effectTurns, s.enemyAtkDownPct);
+                            }
+                        } else {
+                            std::cout << ui::color(ui::c::shine, "  " + s.name + "!") << "\n";
+                        }
+                        acted = true;
                     }
-                } else {
-                    std::cout << ui::color(96, "  " + s.name + "!") << "\n";
                 }
-                acted = true;
-            }
             }
         } else {  // basic attack
             const std::size_t tgt = chooseTarget();
             Enemy& e = enemies[tgt];
             const int dealt = dealAttack(pc, st, pb, e, eb[tgt], rng,
-                                         adrenaline, critExtra, /*compact=*/false);
+                                         adrenaline, critExtra);
             if (dealt > 0) acted = true;
         }
         (void)acted;
@@ -611,20 +661,21 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
         // -- enemy phase (rogue First Strike: enemies skip round 1) --
         const bool rogueFree = pc.classId() == ClassId::Rogue && roundNum == 1;
         if (rogueFree) {
-            std::cout << ui::color(33, "  First Strike! The enemies are caught off guard.") << "\n";
+            std::cout << ui::color(ui::c::gold, "  First Strike! The enemies are caught off guard.") << "\n";
         } else {
-            for (std::size_t i = 0; i < enemies.size(); ++i) {
+            const std::size_t roster = enemies.size();
+            for (std::size_t i = 0; i < roster; ++i) {
                 if (!enemies[i].alive()) continue;
-                tickTimers(eb[i]);
 
                 if (hasStatus(eb[i], core::StatusEffect::Stun)) {
-                    std::cout << ui::color(94, "  " + enemies[i].name + " is stunned and skips its turn.") << "\n";
+                    std::cout << ui::color(ui::c::frost, "  " + enemies[i].name + " is stunned and skips its turn.") << "\n";
+                    tickTimers(eb[i]);
                     continue;
                 }
 
                 if (enemies[i].boss && !bossSummoned && enemies[i].hp <= enemies[i].hpMax / 2) {
                     bossSummoned = true;
-                    std::cout << ui::color(35, "  " + enemies[i].name + " summons a Dark Thrall!") << "\n";
+                    std::cout << ui::color(ui::c::arcane, "  " + enemies[i].name + " summons a Dark Thrall!") << "\n";
                     const Enemy& src = enemies[i];
                     Enemy thrall;
                     thrall.name = "Dark Thrall";
@@ -637,7 +688,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
 
                 Enemy& e = enemies[i];
                 if (e.boss && e.hp <= e.hpMax / 4)
-                    std::cout << ui::color(31, ui::bold("  " + e.name + " ENRAGES!")) << "\n";
+                    std::cout << ui::color(ui::c::bad, ui::bold("  " + e.name + " ENRAGES!")) << "\n";
 
                 const bool enraged = e.boss && e.hp <= e.hpMax / 4;
                 double atk = static_cast<double>(e.attack) * (0.9 + 0.2 * rng.roll01());
@@ -653,9 +704,10 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 int guard = 0;
                 if (hasStatus(pb, core::StatusEffect::Guard, &guard))
                     atk *= (100.0 - static_cast<double>(guard)) / 100.0;
-                const int dealt = std::max(1, static_cast<int>(atk));
+                const int cap = std::max(1, st.maxHp * 60 / 100);
+                const int dealt = std::clamp(static_cast<int>(atk), 1, cap);
                 pc.takeDamage(dealt);
-                std::cout << ui::color(31, "  " + e.name + " hits you for " + std::to_string(dealt)) << ".\n";
+                std::cout << ui::color(ui::c::bad, "  " + e.name + " hits you for " + std::to_string(dealt)) << ".\n";
 
                 if (pc.classId() == ClassId::Warrior && pc.alive() && adrenaline < 3)
                     ++adrenaline;
@@ -664,8 +716,10 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 if (e.has(EnemyAffix::Regenerating)) {
                     const int reg = std::max(1, e.hpMax / 15);
                     e.hp = std::min(e.hpMax, e.hp + reg);
-                    std::cout << ui::color(32, "  " + e.name + " regenerates " + std::to_string(reg) + " HP.") << "\n";
+                    std::cout << ui::color(ui::c::good, "  " + e.name + " regenerates " + std::to_string(reg) + " HP.") << "\n";
                 }
+
+                tickTimers(eb[i]);
             }
         }
 
@@ -678,20 +732,6 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
         pc.restoreResource(resourceRegenPerTurn(pc.classId()) + st.manaRegenPerTurn,
                            st.maxResource);
         tickTimers(pb);
-
-        // -- auto-attack continuation check --
-        if (autoActive) {
-            const bool lowHp = pc.hp() * 100 < st.maxHp * 35;
-            bool bossProblem = false;
-            for (const auto& e : enemies)
-                if (e.boss && e.hp <= e.hpMax / 4) bossProblem = true;
-            if (!pc.alive() || !anyAlive() || lowHp || bossProblem || bossSummoned) {
-                if (autoActive) {
-                    autoActive = false;
-                    std::cout << "  Auto-attack stopped. Your call now.\n";
-                }
-            }
-        }
     }
 
     res.won = pc.alive();

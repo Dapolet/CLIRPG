@@ -2,8 +2,10 @@
 #include "combat.hpp"
 #include "core.hpp"
 #include "game.hpp"
+#include "glory.hpp"
 #include "items.hpp"
 #include "save.hpp"
+#include "ui.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -639,13 +641,12 @@ void testSaveV4RecordsAndRunes() {
     CHECK(!save::peek("no_such_file.rpg").valid, "peek on missing file invalid");
 }
 
-void testAutoAttackToggle() {
+void testBasicAttackLoop() {
     using namespace combat;
     core::Rng rng(1);
     std::ostringstream out;
     std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
 
-    // easy kill: '=' should run the fight with no further input
     {
         Character pc(ClassId::Rogue);
         Vault v;
@@ -656,32 +657,31 @@ void testAutoAttackToggle() {
         weak.attack = 1;
         weak.xpReward = 1;
         weak.goldReward = 1;
-        std::istringstream in("=\n");
+        std::istringstream in("a\na\na\na\na\na\na\na\na\na\n");
         std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
         const Result res = fight(pc, v, { weak }, rng);
         std::cin.rdbuf(oldIn);
-        CHECK(res.won, "auto-attack finishes an easy fight");
+        std::cin.clear();
+        CHECK(res.won, "repeated basic attacks finish an easy fight");
         CHECK(pc.hp() == pc.stats(v).maxHp, "rogue untouchable in a trivial fight");
     }
 
-    // dangerous fight: auto must cede control before death
     {
         Character pc(ClassId::Rogue);
         Vault v;
         out.str("");
-        Enemy mean;
-        mean.name = "Brute";
-        mean.hpMax = mean.hp = 300;
-        mean.attack = 20;
-        mean.xpReward = 3;
-        mean.goldReward = 3;
-        std::istringstream in("=\n");
+        Enemy weak;
+        weak.name = "Pebble";
+        weak.hpMax = weak.hp = 5;
+        weak.attack = 1;
+        weak.xpReward = 1;
+        weak.goldReward = 1;
+        std::istringstream in("a\n");
         std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
-        const Result res = fight(pc, v, { mean }, rng);
+        const Result res = fight(pc, v, { weak }, rng);
         std::cin.rdbuf(oldIn);
-        CHECK(out.str().find("Auto-attack stopped") != std::string::npos,
-              "auto-attack prints a stop notice when it gets dangerous");
-        CHECK(!res.won, "player eventually falls");
+        std::cin.clear();
+        CHECK(res.won, "EOF falls back to basic attacks and still wins");
     }
 
     std::cout.rdbuf(oldOut);
@@ -747,6 +747,14 @@ void testBossSummonSafe() {
           "boss keeps its name after summoning (no dangling reference)");
     CHECK(text.find("  hits you for") == std::string::npos,
           "no empty-name enemy attack after summon");
+    std::size_t thrallHits = 0;
+    const std::string thrallAttack = "Dark Thrall hits you for";
+    std::size_t pos2 = 0;
+    while ((pos2 = text.find(thrallAttack, pos2)) != std::string::npos) {
+        ++thrallHits;
+        pos2 += thrallAttack.size();
+    }
+    CHECK(thrallHits == 1, "thrall skips the summon round, then acts on the next round");
 }
 
 void testDotExpiry() {
@@ -780,6 +788,56 @@ void testDotExpiry() {
         pos += std::string("Burn bites Goo").size();
     }
     CHECK(ticks == 2, "2-turn Burn ticks exactly twice then expires");
+}
+
+void testStunSkipsEnemyTurn() {
+    using namespace combat;
+    core::Rng rng(0);
+    Character pc(ClassId::Warrior);
+    CHECK(pc.spendPoint(1, 0), "warrior unlocks Shield Slam");
+    Vault v;
+
+    Enemy lump;
+    lump.name = "Lump";
+    lump.hpMax = lump.hp = 80;
+    lump.attack = 1;
+    lump.xpReward = 1;
+    lump.goldReward = 1;
+
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    std::istringstream in("s\n1\na\ns\n1\na\ns\n1\na\ns\n1\na\ns\n1\na\ns\n1\na\n"
+                          "s\n1\na\ns\n1\na\ns\n1\na\ns\n1\na\ns\n1\na\ns\n1\na\n"
+                          "s\n1\na\ns\n1\na\ns\n1\na\ns\n1\na\ns\n1\na\ns\n1\na\n");
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    const Result res = fight(pc, v, { lump }, rng);
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut);
+
+    CHECK(res.won, "stun-heavy fight still finishes");
+    std::size_t stuns = 0, pos = 0;
+    const std::string needle = "is stunned and skips its turn.";
+    while ((pos = out.str().find(needle, pos)) != std::string::npos) {
+        ++stuns;
+        pos += needle.size();
+    }
+    CHECK(stuns >= 1, "a stunned enemy visibly skips its turn (stun survives its own round)");
+}
+
+void testLevelUpPreservesHp() {
+    Character pc(ClassId::Warrior);
+    Vault v;
+    v.perks[static_cast<std::size_t>(PerkId::Vitals)] = true;  // +8% max HP
+    const auto st = pc.stats(v);
+    pc.restoreAll(st.maxHp, st.maxResource);
+    const int hpBefore = pc.hp();
+    const int resBefore = pc.resource();
+    pc.gainXp(pc.xpToNext(), 0);
+    CHECK(pc.level() == 2, "one level gained");
+    CHECK(pc.hp() >= hpBefore, "level-up never drops HP below its pre-level value");
+    CHECK(pc.resource() >= resBefore, "level-up never drops resource below its pre-level value");
+    CHECK(pc.hp() > 0, "never dead after a level");
 }
 
 void testXpAppliedOnce() {
@@ -823,6 +881,342 @@ void testVendorPotion() {
     }
 }
 
+void testEnemyHitCap() {
+    using namespace combat;
+    core::Rng rng(3);
+    Character pc(ClassId::Warrior);
+    Vault v;
+    const int maxHp = pc.stats(v).maxHp;
+    Enemy brute;
+    brute.name = "Brute";
+    brute.hpMax = brute.hp = 1000;
+    brute.attack = 100000;
+    brute.xpReward = 1;
+    brute.goldReward = 1;
+
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    std::istringstream in("a\n");
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    (void)fight(pc, v, { brute }, rng);
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut);
+
+    int worst = 0;
+    std::string::size_type at = 0;
+    while ((at = out.str().find("hits you for ", at)) != std::string::npos) {
+        at += 13;
+        const std::string::size_type start = at;
+        while (at < out.str().size() && out.str()[at] >= '0' && out.str()[at] <= '9') ++at;
+        worst = std::max(worst, std::atoi(out.str().substr(start, at - start).c_str()));
+    }
+    const int cap = std::max(1, maxHp * 60 / 100);
+    CHECK(worst == cap, "enemy hits capped at 60% of max HP");
+    CHECK(!pc.alive(), "capped hits still eventually spell death");
+}
+
+void testTrainingStats() {
+    Character pc(ClassId::Warrior);
+    Vault v;
+    CHECK(pc.skillPoints() >= 1, "warrior opens with skill points");
+    pc.gainXp(100'000, 0);
+    Character plain(ClassId::Warrior);
+    plain.gainXp(100'000, 0);
+    CHECK(pc.stats(v).attack == plain.stats(v).attack, "baseline stats match at the same level");
+
+    CHECK(pc.train(TrainId::Might), "train Might");
+    CHECK(pc.trainRank(TrainId::Might) == 1, "rank increments");
+    CHECK(pc.stats(v).attack == plain.stats(v).attack + 3, "Might adds 3 ATK per rank");
+    CHECK(pc.train(TrainId::Vitality), "train Vitality");
+    CHECK(pc.stats(v).maxHp == plain.stats(v).maxHp + 10, "Vitality adds 10 max HP per rank");
+    CHECK(pc.train(TrainId::Focus), "train Focus");
+    CHECK(pc.stats(v).maxResource == plain.stats(v).maxResource + 3, "Focus adds 3 max resource per rank");
+    CHECK(pc.train(TrainId::Tenacity), "train Tenacity");
+    CHECK(pc.stats(v).defense == plain.stats(v).defense + 1, "Tenacity adds 1 defense per rank");
+    CHECK(pc.train(TrainId::Fleetness), "train Fleetness");
+    CHECK(pc.stats(v).regenPerTurn == plain.stats(v).regenPerTurn + 1, "Fleetness adds 1 regen per rank");
+
+    while (pc.train(TrainId::Might)) {}
+    CHECK(pc.trainRank(TrainId::Might) == kTrainMaxRank, "Might caps at max rank");
+    CHECK(!pc.train(TrainId::Might), "cannot train past the cap");
+    CHECK(pc.stats(v).attack == plain.stats(v).attack + 3 * kTrainMaxRank,
+          "capped Might feeds stats");
+}
+
+void testPotionStack() {
+    Vault v;
+    Item h1 = makeVendorPotion(1, false);
+    h1.count = 2;
+    v.addPotion(h1);
+    v.addPotion(h1);
+    CHECK(v.items.size() == 1, "same-kind potions merge into one stack");
+    CHECK(v.items[0].count == 4, "stack count accumulates");
+    CHECK(v.items[0].stacks(), "potion kind stackable");
+    CHECK(potionHeal(v.items[0], 1) == potionAmount(PotionKind::Healing, 1), "floor-scaled heal");
+    CHECK(potionHeal(v.items[0], 10) == potionAmount(PotionKind::Healing, 10), "heal scales with floor");
+    const Item m = makeVendorPotion(1, true);
+    v.addPotion(m);
+    CHECK(v.items.size() == 2, "different kinds stay separate");
+    CHECK(potionHeal(v.items[1], 5) == 0 && potionMana(v.items[1], 5) > 0, "mana draught heals none");
+    v.bindBelt(0, PotionKind::Healing);
+    CHECK(v.beltKind(0) == PotionKind::Healing, "belt bound to healing kind");
+    CHECK(v.beltIndex(0) == 0, "belt resolves to the healing stack");
+    for (int i = 0; i < 4; ++i) CHECK(v.usePotion(0), "drain a stack charge each use");
+    CHECK(v.items.size() == 1, "emptied stack is erased");
+    CHECK(v.beltIndex(0) < 0, "belt slot clears when no stack of that kind remains");
+}
+
+void testBeltKind() {
+    Vault v;
+    CHECK(v.beltKind(0) == PotionKind::None && v.beltKind(1) == PotionKind::None, "belts start empty");
+    v.bindBelt(1, PotionKind::Mana);
+    CHECK(v.beltKind(1) == PotionKind::Mana, "slot 2 binds mana");
+    CHECK(v.beltKind(0) == PotionKind::None, "slot 1 untouched");
+    v.bindBelt(1, PotionKind::Mana);
+    v.bindBelt(0, PotionKind::None);
+    CHECK(v.beltKind(0) == PotionKind::None, "explicit unbind clears the slot");
+    CHECK(v.beltKind(1) == PotionKind::Mana, "unbinding one slot spares the other");
+}
+
+void testVersion9Roundtrip() {
+    core::Rng rng(4);
+    const std::string path = "test_v9.rpg";
+    Character pc(ClassId::Mage);
+    pc.setFloor(15);
+    pc.setHardcore(true);
+    pc.gainXp(500, 0);
+    CHECK(pc.spendPoint(0, 0), "open a spell");
+    CHECK(pc.train(TrainId::Focus), "train Focus once");
+    CHECK(pc.train(TrainId::Focus), "train Focus twice");
+
+    Vault v;
+    v.gold = 55;
+    v.items.push_back(makeGear(8, rng));
+    v.equip(0);
+    Item h = makeVendorPotion(15, false);
+    h.count = 3;
+    v.addPotion(h);
+    Item m = makeVendorPotion(15, true);
+    m.count = 2;
+    v.addPotion(m);
+    v.bindBelt(0, PotionKind::Healing);
+    v.bindBelt(1, PotionKind::Mana);
+
+    CHECK(save::write(path, pc, v), "write v9 save");
+    Character pc2(ClassId::Warrior);
+    Vault v2;
+    CHECK(save::read(path, &pc2, &v2), "read v9 save");
+    CHECK(pc2.snapshot().training == pc.snapshot().training, "training ranks roundtrip");
+    CHECK(pc2.hardcore(), "hardcore flag roundtrips");
+    CHECK(v2.belt == v.belt, "belt kinds roundtrip");
+    int healing = 0;
+    for (const auto& it : v2.items)
+        if (it.potionKind == PotionKind::Healing) healing += it.count;
+    CHECK(healing == 3, "healing stack count roundtrips");
+    int mana = 0;
+    for (const auto& it : v2.items)
+        if (it.potionKind == PotionKind::Mana) mana += it.count;
+    CHECK(mana == 2, "mana stack count roundtrips");
+
+    // legacy header must be rejected (save-format bump rule)
+    {
+        std::ifstream in(path);
+        std::string all((std::istreambuf_iterator<char>(in)), {});
+        all.replace(0, all.find('\n'), "RPGSAVE v8");
+        std::ofstream out(path, std::ios::trunc);
+        out << all;
+    }
+    Character pc3(ClassId::Warrior);
+    Vault v3;
+    CHECK(!save::read(path, &pc3, &v3), "v8 header rejected by v9 reader");
+    std::remove(path.c_str());
+}
+
+void testGloryTrack() {
+    const std::string path = "glory.rpg";
+    std::remove(path.c_str());
+
+    Character pc(ClassId::Warrior);
+    Vault v;
+    CHECK(glory::unlockedCount(glory::load()) == 0, "fresh glory is empty");
+    glory::sync(pc, v);
+    CHECK(glory::unlockedCount(glory::load()) == 0, "empty character earns nothing");
+
+    v.kills = 120;
+    v.bestFloor = 100;
+    v.bossesSlain = 3;
+    v.legendaryFound = 2;
+    v.deaths = 1;
+    v.mastery = 3;
+    v.aspect = 1;
+    v.totalGoldEarned = 12000;
+    glory::sync(pc, v);
+    const auto d1 = glory::load();
+    CHECK(glory::unlockedCount(d1) == 11, "all softcore + stat achievements earned");
+    CHECK(d1.unlocked[0] && !d1.unlocked[11], "First Blood earned, Hardcore Heart not");
+    CHECK(!d1.unlocked[12] && !d1.unlocked[13], "hardcore-floor achievements gated on hardcore");
+    CHECK(!d1.unlocked[14], "Pay the Iron Price needs a permadeath");
+
+    glory::fall(pc, v);
+    const auto d2 = glory::load();
+    CHECK(glory::unlockedCount(d2) == 12, "permadeath grants Pay the Iron Price");
+    CHECK(d2.fallen.size() == 1, "one fallen hero recorded");
+    CHECK(d2.fallen[0].cls == ClassId::Warrior && d2.fallen[0].kills == 120,
+          "fallen entry holds class and kills");
+
+    // persisted across a reload (account-wide)
+    const auto d3 = glory::load();
+    CHECK(d3.unlocked == d2.unlocked, "glory unlocks persist across loads");
+    CHECK(d3.fallen.size() == 1, "fallen list persists across loads");
+
+    // achievements stay earned for a brand-new character (derived-state memory)
+    Character fresh(ClassId::Rogue);
+    Vault v2;
+    glory::sync(fresh, v2);
+    const auto d4 = glory::load();
+    CHECK(d4.unlocked[0], "account-wide achievements survive a new character");
+
+    std::remove(path.c_str());
+}
+
+void testHardcorePermadeath() {
+    const std::string savePath = "test_hc.rpg";
+    const std::string gloryPath = "glory.rpg";
+    std::remove(savePath.c_str());
+    std::remove(gloryPath.c_str());
+
+    core::Rng rng(50);
+    Character pc(ClassId::Warrior);
+    pc.setHardcore(true);
+    pc.setFloor(40);
+    Vault v;
+    v.gold = 50;
+    CHECK(save::write(savePath, pc, v), "hardcore save seeded");
+    CHECK(save::peek(savePath).hardcore, "peek exposes the hardcore flag");
+
+    std::string feed = "a\na\na\na\na\na\na\na\na\na\n";
+    std::istringstream in(feed);
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    game::adventure(pc, v, rng, savePath, {});
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+
+    CHECK(pc.hp() == 0, "hardcore hero died in the Rift");
+    CHECK(!save::read(savePath, &pc, &v), "hardcore death erases the save file");
+    const auto d = glory::load();
+    CHECK(d.fallen.size() == 1, "hardcore death leaves a grave in the glory track");
+    CHECK(d.unlocked[14], "Pay the Iron Price unlocked by permadeath");
+    CHECK(d.unlocked[11], "Hardcore Heart remembered from the doomed run");
+
+    std::remove(savePath.c_str());
+    std::remove(gloryPath.c_str());
+}
+
+void testAmbienceSweep() {
+    using namespace combat;
+    std::vector<std::string> seen;
+    for (int f = 1; f <= 72; ++f) {
+        const std::string b = biomeFor(f);
+        const std::string l = biomeLoreFor(f);
+        CHECK(!l.empty(), "every biome has lore");
+        if (seen.empty() || seen.back() != b) seen.push_back(b);
+    }
+    CHECK(seen.size() == 12, "twelve biome zones across the sweep");
+    CHECK(std::string(biomeLoreFor(1)) != std::string(biomeLoreFor(6)), "lore varies per biome");
+}
+
+void testUiLayoutPlain() {
+    ui::setForcePlain(true);
+
+    const int W = ui::layoutWidth();
+    const std::string lorem =
+        "Cool waters mend your wounds and restore broken will; the shrine answers "
+        "with a runestone that forms slowly in your palm, warm as a candle flame.";
+
+    const std::string wr = ui::wrap(lorem, 20);
+    CHECK(wr.find('\n') != std::string::npos, "long text wraps at narrow width");
+    std::size_t pos = 0;
+    bool bounded = true;
+    while (pos <= wr.size()) {
+        const std::size_t nl = wr.find('\n', pos);
+        std::string seg = wr.substr(pos, nl == std::string::npos
+                                    ? std::string::npos : nl - pos);
+        if (seg.size() > 20) bounded = false;
+        if (nl == std::string::npos) break;
+        pos = nl + 1;
+    }
+    CHECK(bounded, "no wrapped line exceeds its budget");
+
+    std::vector<std::string> srcWords, wrWords;
+    {
+        std::istringstream ls(lorem);
+        std::string t;
+        while (ls >> t) srcWords.push_back(t);
+        std::istringstream lw(wr);
+        while (lw >> t) wrWords.push_back(t);
+    }
+    CHECK(srcWords == wrWords, "wrap preserves word order");
+
+    CHECK(ui::wrap("short", 20) == "short", "short text untouched by wrap");
+    const std::string hard = ui::wrap("supercalifragilisticexpialidocious", 8);
+    CHECK(hard.find('\n') != std::string::npos, "oversized words are hard-split");
+    std::size_t p = 0, hardWidth = 0;
+    while (p <= hard.size()) {
+        const std::size_t nl = hard.find('\n', p);
+        std::string seg = hard.substr(p, nl == std::string::npos
+                                      ? std::string::npos : nl - p);
+        hardWidth = std::max(hardWidth, seg.size());
+        if (nl == std::string::npos) break;
+        p = nl + 1;
+    }
+    CHECK(hardWidth <= 8, "hard-split keeps every segment within budget");
+
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    ui::panelTop("A Puzzling Obelisk", ui::c::accent);
+    ui::panelLine("  Two runes glow - one grants fortune, one brings misfortune.");
+    {
+        const std::string head = "   " + std::string(ui::gly(ui::G_MED)) + " name";
+        const int headLen = 3 + 1 + 1 + 4;
+        const int budget = std::max(W - 2 - headLen, 4);
+        const std::string wrapped = ui::wrap(lorem, budget);
+        const std::string pad(std::size_t(headLen), ' ');
+        std::size_t q = 0;
+        while (true) {
+            const std::size_t nl = wrapped.find('\n', q);
+            ui::panelLine((q == 0 ? head : pad)
+                          + wrapped.substr(q, nl == std::string::npos
+                          ? std::string::npos : nl - q));
+            if (nl == std::string::npos) break;
+            q = nl + 1;
+        }
+    }
+    ui::panelLine(ui::chip(5) + std::string(ui::gly(ui::G_POTION))
+                  + " Belt  bind quick potions (1/2 in combat)");
+    ui::panelBottom(ui::c::accent);
+    std::cout.rdbuf(oldOut);
+
+    const std::string all = out.str();
+    std::size_t q2 = 0;
+    bool anyOverflow = false, anyHighByte = false;
+    while (q2 < all.size()) {
+        const std::size_t nl = all.find('\n', q2);
+        const std::string line = all.substr(q2, nl == std::string::npos
+                                            ? std::string::npos : nl - q2);
+        if (!line.empty() && line.size() > static_cast<std::size_t>(W)) anyOverflow = true;
+        for (unsigned char ch : line)
+            if (ch >= 0x80) anyHighByte = true;
+        if (nl == std::string::npos) break;
+        q2 = nl + 1;
+    }
+    CHECK(!anyOverflow, "panel output stays within the clamped layout width");
+    CHECK(all.find("\x1b[") == std::string::npos, "plain mode embeds no ANSI escapes");
+    CHECK(!anyHighByte, "plain-mode panel output is 7-bit ASCII");
+
+    ui::setForcePlain(false);
+}
+
 void testQuitSaveFlush() {
     // 1.1 regression: quitting the camp persists the floor just cleared.
     // game::adventure covers its own writes when no callback is supplied.
@@ -836,7 +1230,7 @@ void testQuitSaveFlush() {
 
     std::ostringstream out;
     std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
-    std::istringstream in("a\n0\n");   // auto-attack the fight, then quit camp
+    std::istringstream in("a\n0\n");   // basic-attack the fight, then quit camp
     std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
     game::adventure(pc, v, rng, path, {});
     std::cin.rdbuf(oldIn);
@@ -854,6 +1248,7 @@ void testQuitSaveFlush() {
 } // namespace
 
 int main() {
+    std::remove("glory.rpg");
     testRng();
     testFormulas();
     testRarityDistribution();
@@ -880,13 +1275,25 @@ int main() {
     testAspectScaling();
     testBossLootEpic();
     testSaveV4RecordsAndRunes();
-    testAutoAttackToggle();
+    testBasicAttackLoop();
     testRogueFirstStrikeSmoke();
     testBossSummonSafe();
     testDotExpiry();
+    testStunSkipsEnemyTurn();
+    testLevelUpPreservesHp();
     testXpAppliedOnce();
     testVendorPotion();
+    testEnemyHitCap();
+    testTrainingStats();
+    testPotionStack();
+    testBeltKind();
+    testVersion9Roundtrip();
+    testGloryTrack();
+    testHardcorePermadeath();
+    testAmbienceSweep();
+    testUiLayoutPlain();
     testQuitSaveFlush();
+    std::remove("glory.rpg");
 
     std::cout << "\n" << checks << " checks, " << failures << " failures\n";
     return failures == 0 ? 0 : 1;

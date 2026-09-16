@@ -153,6 +153,61 @@ int resourceRegenPerTurn(ClassId c) {
     return c == ClassId::Mage ? 2 : 1;
 }
 
+std::string spellBlurb(const Spell& s, int level) {
+    std::string out = s.name + " — ";
+    if (s.type == SpellType::Heal) {
+        out += "heals " + std::to_string(spellHeal(s, level)) + " HP";
+        if (s.buffAttack > 0)  out += ", +" + std::to_string(s.buffAttack) + "% ATK";
+        if (s.buffDefense > 0) out += ", +" + std::to_string(s.buffDefense) + "% DEF";
+        if (s.buffTurns > 0)   out += " " + std::to_string(s.buffTurns) + " turns";
+    } else if (s.type == SpellType::BuffSelf) {
+        out += "self buff";
+        if (s.buffAttack > 0)  out += " +" + std::to_string(s.buffAttack) + "% ATK";
+        if (s.buffDefense > 0) out += " +" + std::to_string(s.buffDefense) + "% DEF";
+        if (s.buffTurns > 0)   out += " " + std::to_string(s.buffTurns) + " turns";
+    } else {
+        if (s.element != core::Element::None)
+            out += std::string(core::elementName(s.element)) + " ";
+        out += std::to_string(spellDamage(s, level)) + " dmg";
+        if (s.hits > 1) out += " x" + std::to_string(s.hits);
+        if (s.armorShred > 0)  out += ", shreds " + std::to_string(s.armorShred) + " DEF";
+        if (s.stunChancePct > 0) out += ", " + std::to_string(s.stunChancePct) + "% stun";
+        if (s.enemyAtkDownPct > 0)
+            out += ", Enfeeble " + std::to_string(s.enemyAtkDownPct) + "%";
+        if (s.enemyVulnPct > 0)
+            out += ", Vulnerable " + std::to_string(s.enemyVulnPct) + "%";
+        if (s.effect != core::StatusEffect::None) {
+            out += ", " + std::string(core::statusName(s.effect));
+            if (s.effectTurns > 0)
+                out += " " + std::to_string(s.effectTurns) + " turns";
+        }
+    }
+    out += ", " + std::to_string(s.cost) + " res, cd " + std::to_string(s.cooldown);
+    return out;
+}
+
+const char* trainName(TrainId t) {
+    switch (t) {
+        case TrainId::Might:     return "Might";
+        case TrainId::Vitality:  return "Vitality";
+        case TrainId::Focus:     return "Focus";
+        case TrainId::Tenacity:  return "Tenacity";
+        case TrainId::Fleetness: return "Fleetness";
+        default:                 return "?";
+    }
+}
+
+const char* trainDesc(TrainId t) {
+    switch (t) {
+        case TrainId::Might:     return "+3 ATK per rank";
+        case TrainId::Vitality:  return "+10 max HP per rank";
+        case TrainId::Focus:     return "+3 max resource per rank";
+        case TrainId::Tenacity:  return "+1 defense per rank";
+        case TrainId::Fleetness: return "+1 HP regen/turn per rank";
+        default:                 return "?";
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Character
 // ---------------------------------------------------------------------------
@@ -266,6 +321,13 @@ EffectiveStats Character::stats(const Vault& vault) const {
     s.maxHp = s.maxHp + s.maxHp * hpPct / 100;
     s.maxResource = s.maxResource + s.maxResource * resPct / 100;
 
+    // Passive training (permanent, capped at kTrainMaxRank per discipline)
+    s.attack      += 3 * training_[0];
+    s.maxHp       += 10 * training_[1];
+    s.maxResource += 3 * training_[2];
+    s.defense     += training_[3];
+    s.regenPerTurn += training_[4];
+
     // Rift Aspect perks (permanent, chosen per Ascension)
     if (vault.perks[static_cast<std::size_t>(PerkId::Insight)])  s.xpGainPct += 10;
     if (vault.perks[static_cast<std::size_t>(PerkId::Vitals)])   s.maxHp += s.maxHp * 8 / 100;
@@ -328,16 +390,40 @@ int Character::pointsSpent() const {
     return total;
 }
 
+int Character::trainRank(TrainId t) const {
+    const int i = static_cast<int>(t);
+    if (i < 0 || i >= kNumTrains) return 0;
+    return training_[static_cast<std::size_t>(i)];
+}
+
+bool Character::train(TrainId t) {
+    const int i = static_cast<int>(t);
+    if (i < 0 || i >= kNumTrains) return false;
+    int& rank = training_[static_cast<std::size_t>(i)];
+    if (rank >= kTrainMaxRank || skillPoints_ < 1) return false;
+    skillPoints_ -= 1;
+    ++rank;
+    return true;
+}
+
+int Character::trainingSpent() const {
+    int total = 0;
+    for (const int r : training_) total += r;
+    return total;
+}
+
 void Character::gainXp(int amount, int gainPct) {
     if (amount <= 0) return;
     int gained = amount + amount * gainPct / 100;
     xp_ += gained;
     while (xp_ >= xpToNext() && level_ < 999) {
         xp_ -= xpToNext();
+        const int prevMax = baseMaxHp(classId_, level_);
+        const int prevRes = baseResource(classId_, level_);
         ++level_;
         ++skillPoints_;
-        hp_ = baseMaxHp(classId_, level_);
-        resource_ = baseResource(classId_, level_);
+        hp_ += std::max(0, baseMaxHp(classId_, level_) - prevMax);
+        resource_ += std::max(0, baseResource(classId_, level_) - prevRes);
     }
     if (hp_ <= 0) hp_ = baseMaxHp(classId_, level_);   // never dead after a level
 }
@@ -359,7 +445,7 @@ void Character::restoreAll(int hpCap, int resCap) {
 }
 
 Character::Snapshot Character::snapshot() const {
-    return Snapshot{ classId_, level_, xp_, skillPoints_, hp_, resource_, floor_, unlocked_ };
+    return Snapshot{ classId_, level_, xp_, skillPoints_, hp_, resource_, floor_, hardcore_, unlocked_, training_ };
 }
 
 void Character::restore(const Snapshot& s) {
@@ -370,7 +456,9 @@ void Character::restore(const Snapshot& s) {
     hp_ = s.hp;
     resource_ = s.resource;
     floor_ = s.floor;
+    hardcore_ = s.hardcore;
     unlocked_ = s.unlocked;
+    training_ = s.training;
     if (hp_ <= 0) hp_ = baseMaxHp(classId_, level_);
 }
 

@@ -25,8 +25,8 @@ private:
 };
 
 constexpr double kGrowRate = 1.07;
-constexpr double kXpBase   = 40.0;
-constexpr double kXpExp    = 1.6;
+constexpr double kXpBase   = 52.0;
+constexpr double kXpExp    = 1.75;
 
 inline double aspectScale(int aspect) {
     return 1.0 + 0.15 * static_cast<double>(aspect > 0 ? aspect : 0);

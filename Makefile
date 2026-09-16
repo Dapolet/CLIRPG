@@ -16,7 +16,7 @@ endif
 
 # Sources live in src/; objects + binaries land in build/.
 MAIN      := main.cpp
-GAME      := game.cpp ui.cpp combat.cpp character.cpp items.cpp save.cpp io.cpp core.cpp
+GAME      := game.cpp ui.cpp combat.cpp character.cpp items.cpp save.cpp glory.cpp io.cpp core.cpp
 TEST      := tests.cpp
 SRCS      := $(MAIN) $(GAME) $(TEST)
 

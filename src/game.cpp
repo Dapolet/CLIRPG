@@ -1,5 +1,6 @@
 #include "game.hpp"
 
+#include "glory.hpp"
 #include "save.hpp"
 
 #include <algorithm>
@@ -14,17 +15,35 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
     const auto persistOrWrite = [&]() {
         if (persist) persist();
         else save::write(savePath, pc, vault);
+        glory::sync(pc, vault);
     };
 
     while (true) {
         const int floor = pc.currentFloor();
         const bool bossFloor = floor % 5 == 0;
-        int encounters = 2 + floor / 4;
-        if (encounters > 6) encounters = 6;
+        int encounters = 2 + floor / 6;
+        if (encounters > 5) encounters = 5;
 
         vault.bestFloor = std::max(vault.bestFloor, floor);
         vault.bestiary.addBiome(combat::biomeFor(floor));
-        if (rng.chance(0.40)) ui::floorEvent(pc, vault, floor, rng);
+        if (floor == 1 || std::string(combat::biomeFor(floor)) !=
+                            std::string(combat::biomeFor(floor - 1))) {
+            std::cout << "\n" << ui::color(ui::c::accent, ui::bold(std::string("\u2500\u2500 ")
+                      + combat::biomeFor(floor) + " \u2500\u2500")) << "\n";
+            {
+                const std::string lore = ui::wrap(combat::biomeLoreFor(floor),
+                                                  ui::layoutWidth() - 6);
+                std::size_t pos = 0;
+                while (true) {
+                    const std::size_t nl = lore.find('\n', pos);
+                    std::cout << ui::dim("  " + lore.substr(pos, nl == std::string::npos
+                               ? std::string::npos : nl - pos)) << "\n";
+                    if (nl == std::string::npos) break;
+                    pos = nl + 1;
+                }
+            }
+        }
+        if (rng.chance(0.28)) ui::floorEvent(pc, vault, floor, rng);
 
         bool retreated = false;
         bool died = false;
@@ -38,9 +57,22 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
 
             std::cout << "\n";
             ui::panelTop("Floor " + std::to_string(floor) + "  \u00b7  encounter "
-                         + std::to_string(i + 1) + "/" + std::to_string(encounters), 36);
-            ui::panelLine(ui::dim("  " + std::string(combat::biomeFor(floor))));
-            if (isBossFight) ui::panelLine(ui::color(31, ui::bold("  <BOSS FIGHT>")));
+                         + std::to_string(i + 1) + "/" + std::to_string(encounters), ui::c::accent);
+            ui::panelLine(ui::color(ui::c::accent, "  " + std::string(combat::biomeFor(floor))
+                         ));
+            {
+                const std::string lore = ui::wrap(combat::biomeLoreFor(floor),
+                                                  ui::layoutWidth() - 6);
+                std::size_t pos = 0;
+                while (true) {
+                    const std::size_t nl = lore.find('\n', pos);
+                    ui::panelLine(ui::dim("  " + lore.substr(pos, nl == std::string::npos
+                                          ? std::string::npos : nl - pos)));
+                    if (nl == std::string::npos) break;
+                    pos = nl + 1;
+                }
+            }
+            if (isBossFight) ui::panelLine(ui::color(ui::c::bad, ui::bold("  <BOSS FIGHT>")));
             ui::panelBottom();
 
             const auto res = combat::fight(pc, vault, foes, rng);
@@ -50,14 +82,29 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
                 break;
             }
             if (!res.won) {
+                if (pc.hardcore()) {
+                    glory::fall(pc, vault);
+                    save::erase(savePath);
+                    std::cout << ui::color(ui::c::bad, ui::bold(
+                        "\nYou have been slain \u2014 and the Rift keeps the body.")) << "\n";
+                    std::cout << ui::color(ui::c::bad,
+                        "  " + std::string(className(pc.classId())) + "  L"
+                        + std::to_string(pc.level()) + "  \u00b7  Floor "
+                        + std::to_string(pc.currentFloor()) + "  \u00b7  "
+                        + std::to_string(vault.kills) + " kills  \u00b7  "
+                        + std::to_string(vault.totalGoldEarned) + " gold earned.\n");
+                    std::cout << ui::color(ui::c::bad,
+                        "  The save has been erased. Your legend is etched into the Glory track.\n");
+                    return;
+                }
                 const int lost = vault.gold / 5;
                 save::applyDeath(pc, vault);
                 persistOrWrite();
-                std::cout << ui::color(31,
+                std::cout << ui::color(ui::c::bad,
                     "\nYou have been slain. The Rift's vault endures your death. "
                     "Your body slides back to the camp on Floor " +
                     std::to_string(pc.currentFloor()) + ".\n");
-                std::cout << ui::color(31, "Lost " + std::to_string(lost) + " gold on the way out.") << "\n";
+                std::cout << ui::color(ui::c::bad, "Lost " + std::to_string(lost) + " gold on the way out.") << "\n";
                 died = true;
                 break;
             }
@@ -68,7 +115,7 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
             const int gainedXp = res.xp + res.xp * xpGainPct / 100;
             const int gainedGold = res.loot.gold + res.loot.gold * goldGainPct / 100;
             pc.gainXp(res.xp, xpGainPct);
-            std::cout << ui::color(32, "Victory!") << " +" << gainedXp << " XP, +"
+            std::cout << ui::color(ui::c::good, "Victory!") << " +" << gainedXp << " XP, +"
                       << gainedGold << " gold";
             if (res.loot.shards) std::cout << ", +" << res.loot.shards << " shards";
             if (res.loot.essence) std::cout << ", +" << res.loot.essence << " essence";
@@ -80,7 +127,7 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
                 vault.add(it);
             }
             for (const auto& r : res.loot.runes) {
-                std::cout << "    rune: " << ui::color(33, r.describe()) << "\n";
+                std::cout << "    rune: " << ui::color(ui::c::gold, r.describe()) << "\n";
                 vault.runes.push_back(r);
             }
             vault.gold += gainedGold;
@@ -90,7 +137,7 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
             vault.kills += res.kills;
             if (isBossFight) ++vault.bossesSlain;
             if (pc.level() > before)
-                std::cout << ui::color(33, "LEVEL UP! You are now level ") +
+                std::cout << ui::color(ui::c::gold, "LEVEL UP! You are now level ") +
                                  std::to_string(pc.level()) << " (+1 skill point)\n";
             persistOrWrite();
         }
@@ -101,7 +148,7 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
 
         if (!died && !retreated && floor % 25 == 0) {
             ++vault.mastery;
-            std::cout << ui::color(35, "\nRIFT MASTERY +1")
+            std::cout << ui::color(ui::c::arcane, "\nRIFT MASTERY +1")
                       << " \u2014 your power compounds as the Rift deepens.\n";
             persistOrWrite();
         }
@@ -118,7 +165,7 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
             pc.setFloor(1);
             const auto st = pc.stats(vault);
             pc.restoreAll(st.maxHp, st.maxResource);
-            std::cout << ui::color(35, "You tear a new Rift open from Floor 1")
+            std::cout << ui::color(ui::c::arcane, "You tear a new Rift open from Floor 1")
                       << " \u2014 Aspect " << vault.aspect << " heightens the darkness.\n";
             persistOrWrite();
         }

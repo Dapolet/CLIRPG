@@ -43,6 +43,14 @@ const std::vector<Spell>& classSpells(ClassId c);
 int spellDamage(const Spell& s, int level);
 int spellHeal(const Spell& s, int level);
 int resourceRegenPerTurn(ClassId c);
+std::string spellBlurb(const Spell& s, int level);   // one-line effect summary
+
+// Passive training: a permanent skill-point sink available at camp.
+enum class TrainId { Might, Vitality, Focus, Tenacity, Fleetness, kNumTrains };
+constexpr int kNumTrains = static_cast<int>(TrainId::kNumTrains);
+constexpr int kTrainMaxRank = 5;
+const char* trainName(TrainId t);
+const char* trainDesc(TrainId t);
 
 struct EffectiveStats {
     int maxHp = 0;
@@ -72,15 +80,25 @@ public:
     int currentFloor() const { return floor_; }
     void setFloor(int f) { floor_ = f; }
     bool alive() const { return hp_ > 0; }
+    bool hardcore() const { return hardcore_; }
+    void setHardcore(bool hc) { hardcore_ = hc; }
 
     EffectiveStats stats(const Vault& vault) const;
 
-    bool isUnlocked(int branch, int depth) const { return unlocked_.at(branch * 4 + depth); }
+    bool isUnlocked(int branch, int depth) const {
+        const int i = branch * 4 + depth;
+        if (i < 0 || i >= static_cast<int>(unlocked_.size())) return false;
+        return unlocked_[static_cast<std::size_t>(i)];
+    }
     const Spell& spell(int branch, int depth) const;
     bool spendPoint(int branch, int depth);
     void respec();
     int pointsSpent() const;
     std::array<bool, 12> tree() const { return unlocked_; }
+
+    int  trainRank(TrainId t) const;
+    bool train(TrainId t);                 // spend 1 skill point, cap kTrainMaxRank
+    int  trainingSpent() const;
 
     void gainXp(int amount, int gainPct);
     void healHp(int n, int cap = 0);
@@ -99,7 +117,9 @@ public:
         int hp = 0;
         int resource = 0;
         int floor = 1;
+        bool hardcore = false;
         std::array<bool, 12> unlocked{};
+        std::array<int, kNumTrains> training{};
     };
     Snapshot snapshot() const;
     void restore(const Snapshot& s);
@@ -112,7 +132,9 @@ private:
     int hp_ = 0;
     int resource_ = 0;
     int floor_ = 1;
+    bool hardcore_ = false;
     std::array<bool, 12> unlocked_{};
+    std::array<int, kNumTrains> training_{};
 };
 
 } // namespace rpg

@@ -1,5 +1,7 @@
 #include "items.hpp"
 
+#include "ui.hpp"
+
 #include <algorithm>
 #include <cstdlib>
 #include <string>
@@ -107,10 +109,10 @@ int socketsFor(Rarity r) {
 int tierUnlockFloor(ItemTier t) {
     switch (t) {
         case ItemTier::Iron:    return 1;
-        case ItemTier::Steel:   return 8;
-        case ItemTier::Mythril: return 18;
-        case ItemTier::Adamant: return 35;
-        case ItemTier::Void:    return 60;
+        case ItemTier::Steel:   return 10;
+        case ItemTier::Mythril: return 24;
+        case ItemTier::Adamant: return 45;
+        case ItemTier::Void:    return 75;
     }
     return 1;
 }
@@ -211,15 +213,20 @@ std::string Rune::describe() const {
     return std::string(runeName(type)) + " +" + std::to_string(value);
 }
 
-std::string Item::describe() const {
+std::string Item::describe(int floor) const {
+    if (consumable) {
+        const int f = std::max(floor, 1);
+        std::string out = name;
+        if (count > 1) out += " x" + std::to_string(count);
+        if (potionKind == PotionKind::Healing)
+            out += " heals " + std::to_string(potionAmount(PotionKind::Healing, f)) + " HP";
+        else if (potionKind == PotionKind::Mana)
+            out += " restores " + std::to_string(potionAmount(PotionKind::Mana, f)) + " resource";
+        return out;
+    }
     std::string out = name + " [" + rarityName(rarity) + " " + tierName(tier) +
                       " iLvl " + std::to_string(iLvl) + "]";
     if (setTag != SetId::None) out += " [" + std::string(setName(setTag)) + " set]";
-    if (consumable) {
-        if (heal > 0)        out += " heals " + std::to_string(heal) + " HP";
-        if (manaRestore > 0) out += " restores " + std::to_string(manaRestore) + " resource";
-        return out;
-    }
     if (power > 0) out += " power " + std::to_string(power);
     if (!affixes.empty()) {
         out += " (";
@@ -231,9 +238,9 @@ std::string Item::describe() const {
     }
     if (!runes.empty() || freeSockets() > 0) {
         out += " [";
-        for (const auto& r : runes) out += "◆" + r.describe() + ", ";
+        for (const auto& r : runes) out += std::string(ui::gly(ui::G_SOCKET)) + r.describe() + ", ";
         for (int i = static_cast<int>(runes.size()); i < socketsFor(rarity); ++i)
-            out += "◇";
+            out += ui::gly(ui::G_EMPTY);
         out += "]";
     }
     return out;
@@ -260,7 +267,40 @@ void Vault::unequip(Slot s) { equipped[slotIndex(s)] = -1; }
 void Vault::add(const Item& it) {
     Item copy = it;
     if (copy.uid <= 0) copy.uid = nextUid++;
+    if (copy.consumable && copy.count <= 0) copy.count = 1;
     items.push_back(copy);
+}
+
+void Vault::addPotion(const Item& it) {
+    if (it.potionKind == PotionKind::None) return;
+    for (auto& existing : items) {
+        if (existing.potionKind == it.potionKind) {
+            existing.count += std::max(it.count, 1);
+            return;
+        }
+    }
+    Item copy = it;
+    copy.consumable = true;
+    copy.count = std::max(it.count, 1);
+    copy.uid = nextUid++;
+    items.push_back(copy);
+}
+
+bool Vault::usePotion(int idx) {
+    if (!hasItem(idx)) return false;
+    Item& it = items[static_cast<std::size_t>(idx)];
+    if (!it.isPot()) return false;
+    if (--it.count > 0) return true;
+    const PotionKind k = it.potionKind;
+    removeAt(idx);
+    bool anyLeft = false;
+    for (const auto& x : items)
+        if (x.potionKind == k) { anyLeft = true; break; }
+    if (!anyLeft) {
+        for (auto& b : belt)
+            if (b == static_cast<int>(k) + 1) b = 0;
+    }
+    return true;
 }
 
 int Vault::indexOfUid(int uid) const {
@@ -269,31 +309,24 @@ int Vault::indexOfUid(int uid) const {
     return -1;
 }
 
-void Vault::saveLoadout(int n) {
-    if (n < 0 || n > 1) return;
-    for (int s = 0; s < kNumSlots; ++s) {
-        const int idx = equipped[static_cast<std::size_t>(s)];
-        loadouts[static_cast<std::size_t>(n)][static_cast<std::size_t>(s)] =
-            hasItem(idx) ? items[static_cast<std::size_t>(idx)].uid : -1;
-    }
+PotionKind Vault::beltKind(int n) const {
+    if (n < 0 || n > 1) return PotionKind::None;
+    const int code = belt[static_cast<std::size_t>(n)];
+    if (code <= 0) return PotionKind::None;
+    return static_cast<PotionKind>(code - 1);
 }
 
-void Vault::equipLoadout(int n) {
+void Vault::bindBelt(int n, PotionKind k) {
     if (n < 0 || n > 1) return;
-    for (int s = 0; s < kNumSlots; ++s) {
-        const int uid = loadouts[static_cast<std::size_t>(n)][static_cast<std::size_t>(s)];
-        if (uid <= 0) { equipped[static_cast<std::size_t>(s)] = -1; continue; }
-        const int idx = indexOfUid(uid);
-        if (idx >= 0 && items[static_cast<std::size_t>(idx)].slot == static_cast<Slot>(s))
-            equipped[static_cast<std::size_t>(s)] = idx;
-    }
+    belt[static_cast<std::size_t>(n)] = (k == PotionKind::None) ? 0 : static_cast<int>(k) + 1;
 }
 
 int Vault::beltIndex(int n) const {
-    if (n < 0 || n > 1) return -1;
-    const int uid = belt[static_cast<std::size_t>(n)];
-    if (uid <= 0) return -1;
-    return indexOfUid(uid);
+    const PotionKind k = beltKind(n);
+    if (k == PotionKind::None) return -1;
+    for (std::size_t i = 0; i < items.size(); ++i)
+        if (items[i].potionKind == k) return static_cast<int>(i);
+    return -1;
 }
 
 bool Vault::removeAt(int idx) {
@@ -314,8 +347,7 @@ void Vault::clear() {
     gold = shards = essence = 0;
     items.clear();
     equipped = { -1, -1, -1, -1, -1, -1, -1 };
-    belt = { -1, -1 };
-    loadouts = {};
+    belt = { 0, 0 };
     bestFloor = 1;
     bossesSlain = kills = deaths = legendaryFound = 0;
     mastery = aspect = 0;
@@ -437,32 +469,56 @@ void refreshName(Item& it) {
 
 } // namespace
 
-Item makePotion(int pact, core::Rng& rng) {
+int potionAmount(PotionKind k, int floor) {
+    const int f = std::max(floor, 1);
+    switch (k) {
+        case PotionKind::Healing: return 55 + 22 * f;
+        case PotionKind::Mana:    return 45 + 14 * f;
+        case PotionKind::None:    return 0;
+    }
+    return 0;
+}
+
+int potionHeal(const Item& it, int floor) {
+    return it.potionKind == PotionKind::Healing ? potionAmount(PotionKind::Healing, floor) : 0;
+}
+
+int potionMana(const Item& it, int floor) {
+    return it.potionKind == PotionKind::Mana ? potionAmount(PotionKind::Mana, floor) : 0;
+}
+
+Item makePotion(int level, core::Rng& rng) {
     Item it;
     it.consumable = true;
-    it.iLvl = std::max(1, pact);
+    it.iLvl = std::max(1, level);
+    it.count = 1;
     it.rarity = rng.chance(0.85) ? Rarity::Common : Rarity::Uncommon;
     if (rng.chance(0.5)) {
-        it.heal = 55 + 22 * it.iLvl;
-        it.name = rng.chance(0.5) ? "Healing Draught" : "Vitality Elixir";
+        it.potionKind = PotionKind::Healing;
+        it.name = "Healing Draught";
+        it.heal = potionAmount(PotionKind::Healing, 1);
     } else {
-        it.manaRestore = 45 + 14 * it.iLvl;
-        it.name = rng.chance(0.5) ? "Mana Draught" : "Sage's Tonic";
+        it.potionKind = PotionKind::Mana;
+        it.name = "Mana Draught";
+        it.manaRestore = potionAmount(PotionKind::Mana, 1);
     }
     return it;
 }
 
-Item makeVendorPotion(int pact, bool mana) {
+Item makeVendorPotion(int level, bool mana) {
     Item it;
     it.consumable = true;
-    it.iLvl = std::max(1, pact);
+    it.iLvl = std::max(1, level);
+    it.count = 1;
     it.rarity = Rarity::Common;
     if (mana) {
+        it.potionKind = PotionKind::Mana;
         it.name = "Mana Draught";
-        it.manaRestore = 45 + 14 * it.iLvl;
+        it.manaRestore = potionAmount(PotionKind::Mana, 1);
     } else {
+        it.potionKind = PotionKind::Healing;
         it.name = "Healing Draught";
-        it.heal = 55 + 22 * it.iLvl;
+        it.heal = potionAmount(PotionKind::Healing, 1);
     }
     return it;
 }
@@ -474,7 +530,7 @@ Item makeGear(int floor, core::Rng& rng, Rarity minRarity) {
     if (it.rarity < minRarity) it.rarity = minRarity;
     it.tier   = pickTier(floor, rng);
     // drops LAG the floor so blacksmith upgrades (cap = floor) matter
-    const int gap = std::min(floor / 4, 6);
+    const int gap = std::min(floor / 5, 6);
     it.iLvl   = std::max(1, floor - rng.roll(0, gap));
 
     const int s = rng.roll(0, kNumSlots - 1);
@@ -528,7 +584,7 @@ std::vector<Item> rollLoot(int floor, bool boss, core::Rng& rng) {
     }
     const int potions = rng.roll(0, 1);
     for (int i = 0; i < potions; ++i) out.push_back(makePotion(floor, rng));
-    const double rate = std::min(0.35 + 0.02 * static_cast<double>(floor), 0.85);
+    const double rate = std::min(0.20 + 0.02 * static_cast<double>(floor), 0.85);
     if (rng.chance(rate)) out.push_back(makeGear(floor, rng));
     return out;
 }

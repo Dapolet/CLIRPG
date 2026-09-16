@@ -57,5 +57,6 @@ Enemy makeBoss(int floor, core::Rng& rng, int aspect = 0);
 
 // Named zone for a floor band (display + bestiary record).
 const char* biomeFor(int floor);
+const char* biomeLoreFor(int floor);
 
 } // namespace rpg::combat

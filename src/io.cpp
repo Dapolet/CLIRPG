@@ -17,8 +17,10 @@ int askInt(const std::string& prompt, int lo, int hi) {
         std::cout << prompt << " [" << lo << "-" << hi << "]: ";
         std::string line;
         if (!std::getline(std::cin, line)) return lo;
-        const int v = std::atoi(line.c_str());
-        if (v >= lo && v <= hi) return v;
+        char* end = nullptr;
+        const long v = std::strtol(line.c_str(), &end, 10);
+        if (end == line.c_str() || end == nullptr || *end != '\0') continue;
+        if (v >= lo && v <= hi) return static_cast<int>(v);
     }
 }
 

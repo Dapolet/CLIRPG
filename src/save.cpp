@@ -1,6 +1,7 @@
 #include "save.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <ctime>
 #include <fstream>
 #include <sstream>
@@ -74,6 +75,7 @@ std::string itemToString(const Item& it) {
     o += "|" + std::to_string(it.runes.size());
     for (const auto& r : it.runes)
         o += "|" + std::to_string(static_cast<int>(r.type)) + "|" + std::to_string(r.value);
+    o += "|" + std::to_string(static_cast<int>(it.potionKind)) + "|" + std::to_string(it.count);
     return o;
 }
 
@@ -116,6 +118,10 @@ Item stringToItem(const std::string& s) {
             it.runes.push_back(r);
         }
     }
+    if (k + 1 < f.size()) {
+        it.potionKind = static_cast<PotionKind>(std::stoi(f[k]));
+        it.count = std::stoi(f[k + 1]);
+    }
     return it;
 }
 
@@ -136,6 +142,13 @@ bool write(const std::string& path, const Character& pc, Vault& vault) {
     body << "unlocked=";
     for (int i = 0; i < 12; ++i) body << tag(snap.unlocked[static_cast<std::size_t>(i)]);
     body << "\n";
+    body << "train=";
+    for (int i = 0; i < kNumTrains; ++i) {
+        if (i) body << " ";
+        body << snap.training[static_cast<std::size_t>(i)];
+    }
+    body << "\n";
+    body << "hardcore=" << tag(snap.hardcore) << "\n";
 
     body << "[vault]\n";
     body << "gold=" << vault.gold << "\n";
@@ -152,14 +165,6 @@ bool write(const std::string& path, const Character& pc, Vault& vault) {
     body << "nextUid=" << vault.nextUid << "\n";
     body << "saveTime=" << vault.saveTime << "\n";
     body << "belt=" << vault.belt[0] << " " << vault.belt[1] << "\n";
-    for (int n = 0; n < 2; ++n) {
-        body << "loadout" << n << "=";
-        for (int s = 0; s < kNumSlots; ++s) {
-            if (s) body << " ";
-            body << vault.loadouts[static_cast<std::size_t>(n)][static_cast<std::size_t>(s)];
-        }
-        body << "\n";
-    }
     body << "perks=";
     for (int i = 0; i < static_cast<int>(PerkId::kNumPerks); ++i)
         body << tag(vault.perks[static_cast<std::size_t>(i)]);
@@ -232,8 +237,6 @@ bool read(const std::string& path, Character* pc, Vault* vault) {
                 std::istringstream isv(val);
                 isv >> v.belt[0] >> v.belt[1];
             }
-            else if (kv(line, "loadout0=", &val)) parseInts(val, v.loadouts[0]);
-            else if (kv(line, "loadout1=", &val)) parseInts(val, v.loadouts[1]);
             else if (kv(line, "perks=", &val)) {
                 for (int i = 0; i < static_cast<int>(PerkId::kNumPerks) && static_cast<std::size_t>(i) < val.size(); ++i)
                     v.perks[static_cast<std::size_t>(i)] = val[static_cast<std::size_t>(i)] == '1';
@@ -257,6 +260,13 @@ bool read(const std::string& path, Character* pc, Vault* vault) {
                 for (int i = 0; i < 12 && static_cast<std::size_t>(i) < val.size(); ++i)
                     snap.unlocked[static_cast<std::size_t>(i)] = val[static_cast<std::size_t>(i)] == '1';
             }
+            else if (kv(line, "train=", &val)) {
+                std::istringstream isv(val);
+                for (int i = 0; i < kNumTrains; ++i) {
+                    if (!(isv >> snap.training[static_cast<std::size_t>(i)])) break;
+                }
+            }
+            else if (kv(line, "hardcore=", &val)) snap.hardcore = val == "1";
         }
     }
 
@@ -279,6 +289,8 @@ bool read(const std::string& path, Character* pc, Vault* vault) {
     }
 }
 
+bool erase(const std::string& path) { return std::remove(path.c_str()) == 0; }
+
 SaveSummary peek(const std::string& path) {
     SaveSummary s;
     Character pc(ClassId::Warrior);
@@ -288,6 +300,7 @@ SaveSummary peek(const std::string& path) {
     s.cls = pc.classId();
     s.level = pc.level();
     s.floor = pc.currentFloor();
+    s.hardcore = pc.hardcore();
     s.version = kVersion;
     s.saveTime = v.saveTime;
     return s;

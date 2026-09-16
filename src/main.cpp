@@ -2,6 +2,7 @@
 #include "combat.hpp"
 #include "core.hpp"
 #include "game.hpp"
+#include "glory.hpp"
 #include "items.hpp"
 #include "save.hpp"
 #include "ui.hpp"
@@ -38,7 +39,9 @@ int main(int argc, char** argv) {
 
         if (newGame) {
             const ClassId c = ui::chooseClass();
+            const bool hardcore = ui::chooseMode();
             pc = Character(c);
+            pc.setHardcore(hardcore);
             vault.clear();
             vault.gold = 50;
             vault.add(makePotion(1, rng));
@@ -46,14 +49,24 @@ int main(int argc, char** argv) {
             const auto st = pc.stats(vault);
             pc.restoreAll(st.maxHp, st.maxResource);
             save::write(savePath, pc, vault);
-            std::cout << "\nA fresh wanderer enters the Rift...\n";
+            glory::sync(pc, vault);
+            std::cout << "\nA fresh wanderer ";
+            if (hardcore) {
+                std::cout << ui::color(ui::c::bad, ui::bold("chooses the hard path")) << "\n";
+                std::cout << ui::dim("  Death is permanent. Fall, and your legend is etched into the Glory track.\n\n");
+            } else {
+                std::cout << "enters the Rift...\n";
+            }
         } else {
             if (!save::read(savePath, &pc, &vault)) {
                 std::cout << "No valid save in that slot.\n";
                 continue;
             }
+            glory::sync(pc, vault);
             ui::printHeader();
-            std::cout << ui::color(32, "Welcome back, " + std::string(className(pc.classId())) + ".") << "\n";
+            if (pc.hardcore())
+                std::cout << ui::color(ui::c::bad, ui::bold("HARDCORE")) << " ";
+            std::cout << ui::color(ui::c::good, "Welcome back, " + std::string(className(pc.classId())) + ".") << "\n";
         }
 
         const auto persist = [&]() { save::write(savePath, pc, vault); };

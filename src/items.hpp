@@ -12,6 +12,7 @@ namespace rpg {
 enum class Rarity      { Common, Uncommon, Rare, Epic, Legendary };
 enum class Slot        { Weapon, Armor, Ring, Amulet, Helm, Gloves, Boots };
 enum class ItemTier    { Iron, Steel, Mythril, Adamant, Void };
+enum class PotionKind  { None, Healing, Mana };
 enum class AffixType   {
     DamagePct, CritChance, CritBonus, LifeSteal,
     MaxHp, Defense, Regen,
@@ -62,7 +63,7 @@ struct Rune {
 
 struct Item {
     std::string name;
-    int uid = 0;                   // stable identity for belts/loadouts (0 = unset)
+    int uid = 0;                   // stable identity (0 = unset)
     Slot slot = Slot::Weapon;
     ItemTier tier = ItemTier::Iron;
     Rarity rarity = Rarity::Common;
@@ -73,13 +74,16 @@ struct Item {
     std::vector<Rune> runes;
 
     bool consumable = false;
-    int heal = 0;                  // potions
+    PotionKind potionKind = PotionKind::None;
+    int count = 0;                 // stack size for potions (0 for gear)
+    int heal = 0;                  // potions: base display (effect = f(current floor))
     int manaRestore = 0;
 
     bool isPot() const { return consumable; }
+    bool stacks() const { return potionKind != PotionKind::None; }
     int  freeSockets() const { return socketsFor(rarity) - static_cast<int>(runes.size()); }
     bool hasFreeSocket() const { return freeSockets() > 0; }
-    std::string describe() const;
+    std::string describe(int floor = 0) const;
 
     bool operator==(const Item&) const = default;
 };
@@ -87,6 +91,12 @@ struct Item {
 int sellPrice(const Item& it);                   // 8·iLvl·(rarity+1)/2
 int salvageShards(const Item& it);               // 1 + iLvl/20 + 2·rarity
 int salvageEssence(const Item& it);              // 1 for Epic/Legendary
+
+// Potions are floor-agnostic templates: their effect is derived from the
+// player's CURRENT floor at use/display time, never stored at creation.
+int potionAmount(PotionKind k, int floor);       // heal = 55+22f, mana = 45+14f
+int potionHeal(const Item& it, int floor);       // 0 unless Healing kind
+int potionMana(const Item& it, int floor);       // 0 unless Mana kind
 
 // The player's persistent stash. Lives across deaths.
 struct Vault {
@@ -109,8 +119,7 @@ struct Vault {
     std::vector<Item> items;                    // bag + equipped together
     std::array<int, kNumSlots> equipped = { -1, -1, -1, -1, -1, -1, -1 };  // index into items, -1 = empty
     std::vector<Rune> runes;                    // unbound runestones
-    std::array<int, 2> belt = { -1, -1 };       // potion item uids (quick slots)
-    std::array<std::array<int, kNumSlots>, 2> loadouts{};  // uid per slot per loadout
+    std::array<int, 2> belt = { 0, 0 };         // PotionKind code (+1), 0 = empty
     std::array<bool, static_cast<std::size_t>(PerkId::kNumPerks)> perks{};
     Bestiary bestiary;
 
@@ -118,10 +127,12 @@ struct Vault {
     void equip(int itemIndex);
     void unequip(Slot s);
     void add(const Item& it);                     // binds a fresh uid when unset
+    void addPotion(const Item& it);               // stacks same-kind potions, else adds
+    bool usePotion(int idx);                      // consumes one charge, erases stack at 0
     int  indexOfUid(int uid) const;
-    void saveLoadout(int n);
-    void equipLoadout(int n);
-    int  beltIndex(int n) const;                  // item index for belt slot, -1 if none
+    int  beltIndex(int n) const;                  // first stack matching bound kind, -1 if none
+    PotionKind beltKind(int n) const;
+    void bindBelt(int n, PotionKind k);
     bool removeAt(int idx);
     bool hasItem(int idx) const;
     void clear();

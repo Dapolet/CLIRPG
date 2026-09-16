@@ -4,7 +4,9 @@
 
 Descend an endless rift, clear floors, hoard loot, and push your build to the limit. Pure TTY flavor with a colorful themed UI (16-color ANSI) that degrades gracefully to plain ASCII in pipes, tests, and CI.
 
-![Badge: C++20](https://img.shields.io/badge/C%2B%2B-20-blue) ![Badge: no-deps](https://img.shields.io/badge/dependencies-none-brightgreen) ![Badge: tests](https://img.shields.io/badge/tests-12582%20checks-success) ![Badge: platform](https://img.shields.io/badge/macOS-Linux-Windows-brightgreen)
+![Badge: C++20](https://img.shields.io/badge/C%2B%2B-20-blue) ![Badge: no-deps](https://img.shields.io/badge/dependencies-none-brightgreen) ![Badge: tests](https://img.shields.io/badge/tests-12732%20checks-success) ![Badge: platform](https://img.shields.io/badge/macOS-Linux-Windows-brightgreen)
+
+> **New here?** Read [HOW_TO_PLAY.md](HOW_TO_PLAY.md) — a full class-by-class, mechanic-by-mechanic guide.
 
 ---
 
@@ -17,14 +19,14 @@ That "themed UI" is real block-meters, HP bars, and colored legends — here's w
 | HP ################ 40/40   Stamina ############ 14/14
 ------------------------------------------------------------------------------
 | [1] Goblin HP ########## 13/13
-[a]ttack [s]pell [i]tems [f]lee  (= auto) (h help) >   You strike Goblin for 6 damage.
+[a]ttack [s]pell [i]tems [f]lee (h help) >   You strike Goblin for 6 damage.
   Goblin hits you for 4.
 ------------------------------ Round 2  ·  L1 -------------------------------
 | HP ##############.. 36/40   Stamina ############ 14/14
-| Adrenaline x1
-------------------------------------------------------------------------------
+| Belt:  [1] heal 2x  [2] -
+-------------------------------------------------------------------------------
 | [1] Goblin HP #####..... 7/13
-[a]ttack [s]pell [i]tems [f]lee  (= auto) (h help) >   You strike Goblin for 8 damage.
+[a]ttack [s]pell [i]tems [f]lee (h help) >   You strike Goblin for 8 damage.
 Victory! +8 XP, +12 gold
     loot: Mana Draught [Uncommon Iron iLvl 1] restores 59 resource
 ```
@@ -35,8 +37,9 @@ Victory! +8 XP, +12 gold
 
 ### ⚔️ Combat
 
-- **Turn-based fights** — attack, cast, potions (with belt quick-slots), flee, and a `=` auto-attack toggle. Status effects: Burn, Bleed, Poison, Stun, plus the boss's deadly Thrall summon.
-- **3 classes · 12-spell trees** — Warrior, Mage, Rogue; each tree has depth-4 capstone spells, Element-tagged casters (🔥 Fire, ❄️ Frost, ✨ Arcane), and **Enfeeble / Vulnerable** debuffs.
+- **Turn-based fights** — attack, cast, potions (belt quick-keys `1`/`2` for an instant sip), and flee (75%). Potions **stack** and **scale with your floor** (55+22·floor HP / 45+14·floor mana). Every hit lands, capped at **60% of your max HP** so nothing can one-shot you. Status effects: Burn, Bleed, Poison, Stun, plus the boss's deadly Thrall summon.
+- **3 classes · 12-spell trees** — Warrior, Mage, Rogue; each tree has depth-4 capstone spells, Element-tagged casters (🔥 Fire, ❄️ Frost, ✨ Arcane), and **Enfeeble / Vulnerable** debuffs. In combat you pick from your *learned* spells (`0` backs out).
+- **Passive training** — at camp, dump spare skill points into permanent rows (Might +3 ATK, Vitality +10 HP, Focus +3 res, Tenacity +1 DEF, Fleetness +1 regen per rank, 5 ranks each).
 
 ### 📈 Progression
 
@@ -48,9 +51,12 @@ Victory! +8 XP, +12 gold
 
 ### 🎛 Quality of life
 
-- **Robust save system** — `RPGSAVE v7` (checksummed), three slots (`save1-3.rpg`), roguelike death rules. Inspect or hand-verify it in any text editor.
-- **Plain mode / `NO_COLOR`** — full ANSI on a TTY; clean ASCII in pipes, terminals that say `dumb`, or with `--plain`. Standard `NO_COLOR` respected.
-- **Tested hard** — 12,582 assertions across the suite, ASan + UBSan-clean, MSYS2 GCC Windows CI gate.
+- **Robust save system** — `RPGSAVE v9` (checksummed), three slots (`save1-3.rpg`), roguelike death rules. Inspect or hand-verify it in any text editor.
+- **Softcore & Hardcore** — start a run soft (death costs 20% gold and a floor, the vault endures) or hardcore (death erases the save and your hero is etched forever into the Glory track).
+- **Achievement track** — an account-wide **Glory** list in `glory.rpg` (15 achievements, checksummed): unlocks persist even after a slot is overwritten, and every fallen hardcore hero is remembered.
+- **Plain mode / `NO_COLOR`** — full ANSI on a TTY; clean ASCII in pipes, terminals that say `dumb`, or with `--plain`. Every glyph has an ASCII twin (e.g. ◆ healing → `o`), so the game reads fine with zero Unicode. Standard `NO_COLOR` respected.
+- **Tested hard** — 12,732 assertions across the suite, ASan + UBSan-clean, MSYS2 GCC Windows CI gate.
+- **A coherent panel grammar** — semantic color tokens (`ui::c::`), one boxed flow for every menu/event screen, `chip + glyph + label` rows throughout the camp and merchant, and width-aware `wrap()` guards so panels never outgrow the terminal in plain mode.
 
 ---
 
@@ -85,10 +91,10 @@ The build must compile with **zero warnings** — any `warning:` line is a bug.
 | Key | Action |
 | --- | ------ |
 | `a` | Attack |
-| `s` | Cast a spell |
-| `i` | Use a potion (belt slots listed first) |
+| `s` | Cast a learned spell (`0` backs out) |
+| `i` | Use a potion — belt slots listed first, `0` backs out |
 | `f` | Flee the fight |
-| `=` | Toggle auto-attack |
+| `1` / `2` | Drink that belt potion instantly |
 | `h` | In-fight help |
 
 **At camp:**
@@ -98,13 +104,14 @@ The build must compile with **zero warnings** — any `warning:` line is a bug.
 | `1` | Rest (full recovery) |
 | `2` | Blacksmith — upgrade / reforge / awaken / runes |
 | `3` | Merchant — buy / sell / salvage |
-| `4` | Manage gear — equip & loadout save/equip |
-| `5` | Belt — bind quick potions |
-| `6` | Spell trainer — spend skill points |
+| `4` | Equip gear |
+| `5` | Belt — bind quick potions to the `1`/`2` keys |
+| `6` | Trainer — learn spells, or `<P>` passive training |
 | `7` | Respec — refund the tree |
-| `8` | Descend — head deeper |
-| `9` | Records & Codex |
-| `10` | Ascend the Rift *(appears at Floor 100)* |
+| `8` | Inventory — browse gear, potions & runestones |
+| `9` | Descend — head deeper |
+| `10` | Records & Codex |
+| `11` | Ascend the Rift *(appears at Floor 100)* |
 | `0` | Save & quit |
 
 **Your first five minutes:** fight → grab loot → camp → blacksmith/merchant to equip and prep → descend → repeat. Every 25th floor grants **Rift Mastery**; every 5th is a `<BOSS>` fight; Floor 100 unlocks **Ascend the Rift** (prestige +1).
@@ -116,7 +123,7 @@ The build must compile with **zero warnings** — any `warning:` line is a bug.
 Saves are plain text, keyed `=` values, behind an XOR checksum. `cat save1.rpg` looks like this:
 
 ```text
-RPGSAVE v7
+RPGSAVE v9
 [character]
 class=0
 level=1
@@ -126,23 +133,23 @@ hp=33
 resource=14
 floor=1
 unlocked=000000000000
+train=0 1 2 0 0
+hardcore=0
 [vault]
 gold=76
 shards=1
 bestFloor=1
 ...
-[sig]
-42   (XOR checksum of everything above; changes with the payload)
 ```
 
-Every field is human-readable — kill records, perks, belt, loadouts, the whole bestiary are just lines. Versioned (`kVersion`) and checksummed, so corrupt or foreign files are rejected cleanly.
+Every field is human-readable — kill records, perks, belt kinds (`belt=3 0`), potion stacks (`...|kind|count`), training ranks, the hardcore flag, the whole bestiary are just lines. Versioned (`kVersion`) and checksummed, so corrupt or foreign files are rejected cleanly.
 
 ---
 
 ## 🧪 Tests & sanitizers
 
 ```sh
-make tests       # full suite → prints "12582 checks, 0 failures"
+make tests       # full suite → prints "12732 checks, 0 failures"
 make asan        # ASan+UBSan build of the game
 ./build/clirpg_asan   # play through it clean
 make tests_asan  # whole test suite under ASan+UBSan
@@ -163,11 +170,12 @@ One "check" = one assertion; the suite is a set of test cases that script stdout
 | `src/ui.cpp` | Themed panels, glyphs, colors, camp & shop screens |
 | `src/combat.cpp` | Combat engine + status effects + biome/encounter tables |
 | `src/character.cpp` | Classes, spell trees, stats |
-| `src/items.cpp` | Loot gen, runes, crafting, 7-slot vault & loadouts |
-| `src/save.cpp` | Checksummed `RPGSAVE v7` persistence |
+| `src/items.cpp` | Loot gen, runes, crafting, potion stacks & belt kinds |
+| `src/save.cpp` | Checksummed `RPGSAVE v9` persistence |
+| `src/glory.cpp` | Account-wide achievement track + fallen heroes (`glory.rpg`) |
 | `src/core.cpp` | Shared formulas, constants, RNG |
 | `src/io.cpp` | Input handling (pipe-tolerant) |
-| `src/tests.cpp` | The 12,582-assertion harness |
+| `src/tests.cpp` | The 12,732-assertion harness |
 | `Makefile` | all / run / tests / asan / tests_asan / clean |
 
 ---
