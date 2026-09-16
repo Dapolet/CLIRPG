@@ -129,11 +129,12 @@ CampResult camp(Character& pc, Vault& vault, core::Rng& rng);
 
 // shared helpers used by camp & tests-of-UI-free logic
 void showCharacter(const Character& pc, const Vault& vault);
-void showVault(const Vault& vault);
+void showVault(const Vault& vault, const std::vector<int>& gear);
 void equipMenu(Character& pc, Vault& vault);
 void spellBook(const Character& pc);
 void recordsScreen(const Character& pc, const Vault& vault);
 void inventoryMenu(const Character& pc, Vault& vault);
 void beltMenu(Vault& vault);
+bool merchantMenu(Character& pc, Vault& vault, core::Rng& rng);
 
 } // namespace rpg::ui

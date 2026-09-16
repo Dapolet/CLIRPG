@@ -200,7 +200,7 @@ std::vector<Enemy> makeEncounter(int floor, core::Rng& rng, int aspect) {
 }
 
 Enemy makeBoss(int floor, core::Rng& rng, int aspect) {
-    const int idx = floor / 5;
+    const int idx = (std::max(1, floor / 5) - 1) % static_cast<int>(kBossNames.size());
     const double sc = core::enemyScale(floor) * core::aspectScale(aspect);
     Enemy e;
     e.name = kBossNames[static_cast<std::size_t>(idx % kBossNames.size())];
@@ -392,6 +392,14 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
         for (const auto& e : enemies) if (e.alive()) return true;
         return false;
     };
+    const auto countSlain = [&]() {
+        for (const auto& e : enemies)
+            if (!e.alive()) {
+                ++res.kills;
+                vault.bestiary.addEnemy(e.name);
+                if (e.boss) vault.bestiary.addBoss(e.name);
+            }
+    };
     // Manual multi-target selection.
     const auto chooseTarget = [&enemies]() {
         std::vector<std::size_t> alive;
@@ -437,6 +445,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 }
             }
             roundStarted = true;
+            if (!anyAlive()) break;
         }
         const int critExtra = pc.classId() == ClassId::Rogue && roundNum == 0 ? 25 : 0;
 
@@ -507,6 +516,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
         } else if (kind == 'f') {
             if (rng.chance(0.75)) {
                 std::cout << ui::color(ui::c::gold, "You slip away from the fight.") << "\n";
+                countSlain();
                 res.fled = true;
                 res.won = false;
                 return res;
@@ -706,6 +716,12 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 if (e.has(EnemyAffix::Berserker))
                     atk *= 1.0 + 1.5 * (1.0 - static_cast<double>(e.hp) / e.hpMax);
 
+                bool critical = false;
+                if (e.critChance > 0 && rng.chance(e.critChance / 100.0)) {
+                    atk *= 1.5;
+                    critical = true;
+                }
+
                 atk = core::mitigate(atk, st.defense);
                 int guard = 0;
                 if (hasStatus(pb, core::StatusEffect::Guard, &guard))
@@ -713,7 +729,8 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 const int cap = std::max(1, st.maxHp * 60 / 100);
                 const int dealt = std::clamp(static_cast<int>(atk), 1, cap);
                 pc.takeDamage(dealt);
-                std::cout << ui::color(ui::c::bad, "  " + e.name + " hits you for " + std::to_string(dealt)) << ".\n";
+                std::cout << ui::color(ui::c::bad, "  " + e.name + " hits you for " + std::to_string(dealt))
+                          << (critical ? " (CRIT)" : "") << ".\n";
 
                 if (pc.classId() == ClassId::Warrior && pc.alive() && adrenaline < 3)
                     ++adrenaline;
@@ -735,6 +752,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
             hasStatus(pb, core::StatusEffect::Regeneration, &p);
             pc.healHp(p, st.maxHp);
         }
+        if (st.regenPerTurn > 0) pc.healHp(st.regenPerTurn, st.maxHp);
         pc.restoreResource(resourceRegenPerTurn(pc.classId()) + st.manaRegenPerTurn,
                            st.maxResource);
         tickTimers(pb);
@@ -744,12 +762,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
     if (res.won) {
         for (const auto& e : enemies) if (e.alive()) res.won = false;
     }
-    for (const auto& e : enemies)
-        if (!e.alive()) {
-            ++res.kills;
-            vault.bestiary.addEnemy(e.name);
-            if (e.boss) vault.bestiary.addBoss(e.name);
-        }
+    countSlain();
 
     if (res.won) {
         bool boss = false;

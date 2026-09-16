@@ -7,6 +7,7 @@
 #include "save.hpp"
 #include "ui.hpp"
 
+#include <filesystem>
 #include <iostream>
 #include <random>
 #include <string>
@@ -63,7 +64,9 @@ int main(int argc, char** argv) {
             vault.add(makePotion(1, rng));
             const auto st = pc.stats(vault);
             pc.restoreAll(st.maxHp, st.maxResource);
-            save::write(savePath, pc, vault);
+            if (!save::write(savePath, pc, vault))
+                std::cout << ui::color(ui::c::bad,
+                    "  [!] Could not write the save. Progress may be lost.") << "\n";
             glory::sync(pc, vault);
             std::cout << "\nA fresh wanderer ";
             if (hardcore) {
@@ -74,7 +77,10 @@ int main(int argc, char** argv) {
             }
         } else {
             if (!save::read(savePath, &pc, &vault)) {
-                std::cout << "No valid save in that slot.\n";
+                if (std::filesystem::exists(savePath))
+                    std::cout << "That save is corrupted; the Rift refuses it.\n";
+                else
+                    std::cout << "No valid save in that slot.\n";
                 continue;
             }
             glory::sync(pc, vault);
@@ -84,7 +90,7 @@ int main(int argc, char** argv) {
             std::cout << ui::color(ui::c::good, "Welcome back, " + std::string(className(pc.classId())) + ".") << "\n";
         }
 
-        const auto persist = [&]() { save::write(savePath, pc, vault); };
+        const auto persist = [&]() { return save::write(savePath, pc, vault); };
         game::adventure(pc, vault, rng, savePath, persist);
     }
 

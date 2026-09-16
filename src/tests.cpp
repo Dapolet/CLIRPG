@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -142,11 +143,20 @@ void testAwaken() {
     rare.consumable = false;
     rare.rarity = Rarity::Rare;
     rare.affixes.push_back(Affix{ "Keen", AffixType::CritChance, 2 });
-    CHECK(canAwaken(rare), "rare with 1 affix can awaken");
     rare.affixes.push_back(Affix{ "Fierce", AffixType::DamagePct, 5 });
-    CHECK(!canAwaken(rare), "rare with 2 affixes fully awakened");
+    CHECK(rare.freeSockets() == 1, "rare base socket");
+    CHECK(canAwaken(rare), "full-affix rare can awaken");
     awaken(rare, rng);
-    CHECK(rare.affixes.size() == 2, "awaken respects slot cap");
+    CHECK(rare.extraSockets == 1, "awaken opens a bonus socket");
+    CHECK(rare.freeSockets() == 2, "awakened rare has two sockets");
+    CHECK(!canAwaken(rare), "an awakened item cannot awaken twice");
+
+    Item epic;
+    epic.consumable = false;
+    epic.rarity = Rarity::Epic;
+    epic.affixes.push_back(Affix{ "Brilliant", AffixType::Mana, 8 });
+    awaken(epic, rng);
+    CHECK(epic.freeSockets() == 3, "epic awakens to three sockets");
 
     Item common;
     common.rarity = Rarity::Common;
@@ -220,6 +230,9 @@ void testSaveRoundtrip() {
     v.items.push_back(gear);
     v.equip(0);
     v.items.push_back(makePotion(3, rng));
+    Item awakened = makeGear(20, rng);
+    awakened.extraSockets = 1;
+    v.items.push_back(awakened);
 
     CHECK(save::write(path, pc, v), "write succeeds");
     Character pc2(ClassId::Warrior);
@@ -244,6 +257,8 @@ void testSaveRoundtrip() {
           "roundtrip materials/gold");
     CHECK(v2.saveTime > 0, "saveTime is stamped on write");
     CHECK(v2.saveTime == v.saveTime, "saveTime roundtrips exactly");
+    CHECK(v2.items.back().extraSockets == 1, "awakened socket survives save/load");
+    CHECK(v2.items.back() == v.items.back(), "awakened item roundtrips equal");
     CHECK(v2.removeAt(0) == true, "removeAt works post-load");
     CHECK(v2.equipped[slotIndex(Slot::Weapon)] == -1, "removing unpins equipped");
 
@@ -916,6 +931,283 @@ void testEnemyHitCap() {
     CHECK(!pc.alive(), "capped hits still eventually spell death");
 }
 
+void testPassiveRegenApplied() {
+    using namespace combat;
+    core::Rng rng(4);
+    Character pc(ClassId::Warrior);
+    CHECK(pc.train(TrainId::Fleetness), "fleetness rises to rank 1");
+    CHECK(pc.train(TrainId::Fleetness), "fleetness rises to rank 2");
+    Vault v;
+    CHECK(pc.stats(v).regenPerTurn == 2, "fleetness feeds effective regen per turn");
+    pc.takeDamage(pc.stats(v).maxHp - 35);
+
+    Enemy dummy;
+    dummy.name = "Training Dummy";
+    dummy.hpMax = dummy.hp = 10;
+    dummy.attack = 0;
+    dummy.xpReward = 0;
+    dummy.goldReward = 0;
+
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    std::istringstream in("a\na\n");
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    const Result res = fight(pc, v, { dummy }, rng);
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut);
+
+    CHECK(res.won, "two swings fell the training dummy");
+    CHECK(pc.hp() == 36, "passive regen heals after the enemy phase (2 regen - 1 min hit)");
+}
+
+void testMerchantNoFreeMaterials() {
+    core::Rng rng(11);
+    Character pc(ClassId::Warrior);
+    {
+        Vault v;
+        v.gold = 5;
+        std::ostringstream out;
+        std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+        std::istringstream in("3\n4\n0\n");
+        std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+        ui::merchantMenu(pc, v, rng);
+        std::cin.rdbuf(oldIn);
+        std::cin.clear();
+        std::cout.rdbuf(oldOut);
+        CHECK(v.shards == 0, "failed shard purchase grants no shards");
+        CHECK(v.essence == 0, "failed essence purchase grants no essence");
+        CHECK(v.gold == 5, "failed purchases spend no gold");
+    }
+    {
+        Vault v;
+        v.gold = 50;
+        std::ostringstream out;
+        std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+        std::istringstream in("3\n0\n");
+        std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+        ui::merchantMenu(pc, v, rng);
+        std::cin.rdbuf(oldIn);
+        std::cin.clear();
+        std::cout.rdbuf(oldOut);
+        CHECK(v.shards == 3, "successful purchase grants three shards");
+        CHECK(v.gold == 38, "successful purchase spends twelve gold");
+    }
+}
+
+void testSetDropsReachable() {
+    core::Rng rng(9);
+    bool sawSet = false;
+    for (int i = 0; i < 200; ++i)
+        for (const auto& it : rollLoot(30, true, rng))
+            if (it.setTag != SetId::None) sawSet = true;
+    CHECK(sawSet, "bosses can drop set pieces");
+
+    Vault v;
+    Item a = makeGear(30, rng);
+    a.slot = Slot::Weapon;
+    a.power = 0;
+    a.setTag = SetId::Titanic;
+    a.affixes.clear();
+    a.runes.clear();
+    Item b = makeGear(30, rng);
+    b.slot = Slot::Armor;
+    b.power = 0;
+    b.setTag = SetId::Titanic;
+    b.affixes.clear();
+    b.runes.clear();
+    v.add(a);
+    v.equip(0);
+    v.add(b);
+    v.equip(1);
+    Character pc(ClassId::Warrior);
+    const int base = pc.stats(Vault{}).maxHp;
+    CHECK(setPieces(v, SetId::Titanic) == 2, "two titanic pieces counted");
+    CHECK(pc.stats(v).maxHp == base + base * 15 / 100, "titanic 2-piece raises max HP by 15%");
+}
+
+void testDoTFinishTakesVictory() {
+    using namespace combat;
+    core::Rng rng(777);
+    Character pc(ClassId::Mage);
+    CHECK(pc.spendPoint(0, 0), "mage opens with Firebolt");
+    Vault v;
+
+    Enemy goo;
+    goo.name = "Goo";
+    goo.hpMax = goo.hp = 6;
+    goo.attack = 0;
+    goo.xpReward = 0;
+    goo.goldReward = 0;
+
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    std::istringstream in("s\n1\nf\n");
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    const Result res = fight(pc, v, { goo }, rng);
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut);
+
+    CHECK(res.won, "start-of-round burn finishing the last enemy wins the fight");
+    CHECK(res.kills == 1, "slain enemy is counted on the dot walk-off");
+    CHECK(!res.fled, "no corpse-round flee throws the victory away");
+    CHECK(out.str().find("slip away") == std::string::npos, "no flee was attempted");
+}
+
+void testFleeCountsSlainEnemies() {
+    using namespace combat;
+    core::Rng rng(9999);
+    Character pc(ClassId::Warrior);
+    Vault v;
+
+    Enemy squire;
+    squire.name = "Squire Test";
+    squire.hpMax = squire.hp = 1;
+    squire.attack = 0;
+    squire.xpReward = 0;
+    squire.goldReward = 0;
+
+    Enemy overlord;
+    overlord.name = "Overlord Test";
+    overlord.hpMax = overlord.hp = 9999;
+    overlord.attack = 0;
+    overlord.xpReward = 0;
+    overlord.goldReward = 0;
+
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    std::istringstream in("a\n1\nf\nf\nf\nf\nf\nf\n");
+    std::streambuf* oldIn = std::cin.rdbuf(in.rdbuf());
+    const Result res = fight(pc, v, { squire, overlord }, rng);
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut);
+
+    CHECK(res.fled, "the party slips away from the overlord");
+    CHECK(res.kills == 1, "the already-slain squire is tallied on flee");
+    CHECK(v.bestiary.enemyKills("Squire Test") == 1, "bestiary records the squire");
+    CHECK(v.bestiary.enemyKills("Overlord Test") == 0, "the living overlord is not bookkept");
+}
+
+void testEnemyCritApplied() {
+    using namespace combat;
+    const std::uint64_t seed = 1234;
+    const auto firstHit = [](const std::string& text) {
+        const std::string mark = "hits you for ";
+        const auto p = text.find(mark);
+        if (p == std::string::npos) return 0;
+        return std::atoi(text.c_str() + p + mark.size());
+    };
+
+    core::Rng rngA(seed);
+    Character a(ClassId::Mage);
+    Vault va;
+    Enemy sane;
+    sane.name = "Blade";
+    sane.hpMax = sane.hp = 9999;
+    sane.attack = 6;
+    sane.defense = 0;
+    sane.critChance = 0;
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    std::istringstream inA("a\nf\nf\nf\nf\nf\nf\n");
+    std::streambuf* oldIn = std::cin.rdbuf(inA.rdbuf());
+    combat::fight(a, va, { sane }, rngA);
+    std::cin.rdbuf(oldIn);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut);
+
+    core::Rng rngB(seed);
+    Character b(ClassId::Mage);
+    Vault vb;
+    Enemy savage = sane;
+    savage.critChance = 100;
+    std::ostringstream out2;
+    std::streambuf* oldOut2 = std::cout.rdbuf(out2.rdbuf());
+    std::istringstream inB("a\nf\nf\nf\nf\nf\nf\n");
+    std::streambuf* oldIn2 = std::cin.rdbuf(inB.rdbuf());
+    combat::fight(b, vb, { savage }, rngB);
+    std::cin.rdbuf(oldIn2);
+    std::cin.clear();
+    std::cout.rdbuf(oldOut2);
+
+    const int calmHit = firstHit(out.str());
+    const int critHit = firstHit(out2.str());
+    CHECK(calmHit >= 4 && calmHit <= 7, "calm enemy round-1 hit is in the expected band");
+    CHECK(critHit == calmHit * 3 / 2 || critHit > calmHit + 1,
+          "a guaranteed-crit enemy lands a visibly larger first hit");
+    CHECK(out2.str().find("(CRIT)") != std::string::npos, "the crit is announced");
+}
+
+void testBossNameOrder() {
+    using namespace combat;
+    core::Rng r1(50);
+    CHECK(std::string(makeBoss(5, r1, 0).name) == "Twin Fang",
+          "floor 5 spawns the first listed boss");
+    core::Rng r2(51);
+    CHECK(std::string(makeBoss(10, r2, 0).name) == "Baron Gore",
+          "floor 10 spawns the second listed boss");
+    core::Rng r3(52);
+    CHECK(std::string(makeBoss(50, r3, 0).name) == "Eternal One",
+          "floor 50 spawns the last listed boss");
+    core::Rng r4(53);
+    CHECK(std::string(makeBoss(55, r4, 0).name) == "Twin Fang",
+          "the lineup wraps back around at floor 55");
+}
+
+void testSaveWriteAtomic() {
+    core::Rng rng(3);
+    Character pc(ClassId::Rogue);
+    Vault v;
+    v.gold = 777;
+    const std::string path = "test_atomic.rpg";
+    CHECK(save::write(path, pc, v), "atomic save write succeeds");
+    CHECK(std::filesystem::exists(path), "save file exists after write");
+    CHECK(!std::filesystem::exists(path + ".tmp"), "no temp file is left behind");
+    Character pc2(ClassId::Rogue);
+    Vault v2;
+    CHECK(save::read(path, &pc2, &v2), "atomic-written save reads back");
+    CHECK(v2.gold == 777, "gold roundtrips through the atomic write");
+    CHECK(!save::write("no_such_dir/foo.rpg", pc, v), "write into a missing dir fails cleanly");
+    std::filesystem::remove(path);
+}
+
+void testHeirloomExplorationGold() {
+    ui::setForcePlain(true);
+    const std::uint64_t seed = 16;   // first floorEvent draw is case 1 (Forgotten Cache)
+    const int floor = 5;
+
+    core::Rng plainRng(seed);
+    Character plainPc(ClassId::Warrior);
+    Vault plain;
+    const int beforePlain = plain.gold;
+    std::ostringstream out;
+    std::streambuf* oldOut = std::cout.rdbuf(out.rdbuf());
+    ui::floorEvent(plainPc, plain, floor, plainRng);
+    std::cout.rdbuf(oldOut);
+    const int plainGain = plain.gold - beforePlain;
+
+    core::Rng boostedRng(seed);
+    Character boostedPc(ClassId::Warrior);
+    Vault boosted;
+    boosted.perks[static_cast<std::size_t>(PerkId::Heirloom)] = true;
+    const int beforeBoosted = boosted.gold;
+    std::ostringstream out2;
+    std::streambuf* oldOut2 = std::cout.rdbuf(out2.rdbuf());
+    ui::floorEvent(boostedPc, boosted, floor, boostedRng);
+    std::cout.rdbuf(oldOut2);
+    const int boostedGain = boosted.gold - beforeBoosted;
+
+    ui::setForcePlain(false);
+
+    CHECK(plainGain > 0, "seed lands on a gold-granting floor event");
+    CHECK(boostedGain == plainGain + plainGain * 20 / 100,
+          "Heirloom boosts exploration gold by 20%");
+    CHECK(plain.totalGoldEarned == plainGain && boosted.totalGoldEarned == boostedGain,
+          "totalGoldEarned tracks the boosted gold");
+}
+
 void testTrainingStats() {
     Character pc(ClassId::Warrior);
     Vault v;
@@ -942,6 +1234,17 @@ void testTrainingStats() {
     CHECK(!pc.train(TrainId::Might), "cannot train past the cap");
     CHECK(pc.stats(v).attack == plain.stats(v).attack + 3 * kTrainMaxRank,
           "capped Might feeds stats");
+}
+
+void testAddMergesPotions() {
+    Vault v;
+    v.add(makeVendorPotion(1, false));
+    v.add(makeVendorPotion(1, false));
+    CHECK(v.items.size() == 1, "add() merges same-kind potions");
+    CHECK(v.items[0].count == 2, "add() potion counts accumulate");
+    v.add(makeVendorPotion(2, true));
+    CHECK(v.items.size() == 2, "add() keeps different kinds separate");
+    CHECK(v.items[1].manaRestore > 0 && v.items[1].heal == 0, "second stack is the mana draught");
 }
 
 void testPotionStack() {
@@ -1284,7 +1587,17 @@ int main() {
     testXpAppliedOnce();
     testVendorPotion();
     testEnemyHitCap();
+    testPassiveRegenApplied();
+    testMerchantNoFreeMaterials();
+    testSetDropsReachable();
+    testDoTFinishTakesVictory();
+    testFleeCountsSlainEnemies();
+    testEnemyCritApplied();
+    testBossNameOrder();
+    testSaveWriteAtomic();
+    testHeirloomExplorationGold();
     testTrainingStats();
+    testAddMergesPotions();
     testPotionStack();
     testBeltKind();
     testVersion9Roundtrip();

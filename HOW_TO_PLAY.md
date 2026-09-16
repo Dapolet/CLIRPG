@@ -72,7 +72,7 @@ slot overwrites it (your call).
 | DEF | 3 + 1/lvl | 1 + (lvl-1)/2 | 2 + (lvl-1)/2 |
 | Crit chance | 5% | 5% | 10 + (lvl-1)/4 % |
 | Crit bonus dmg | +10% | +15% | +20% |
-| Passive | **Adrenaline** — each hit you take gives +15% to your next attack (stacks). | **Arcane Flow** — faster mana regen. | **First Strike** — +25% crit on round 1. |
+| Passive | **Adrenaline** — each hit you take gives +15% to your next attack (stacks). | **Arcane Flow** — faster mana regen. | **First Strike** — +25% crit on round 1, and enemies are caught off-guard, skipping their first turn. |
 
 **Spell branches per class** (3 branches x 4 ranks each — see *Spells* for the full list):
 

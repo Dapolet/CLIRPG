@@ -17,6 +17,6 @@ namespace rpg::game {
 // state-changing moment (death, level-up, quit, ascend) so the caller stays
 // crash-safe without the loop knowing what storage layer is backing it.
 void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& savePath,
-               const std::function<void()>& persist = {});
+               const std::function<bool()>& persist = {});
 
 } // namespace rpg::game

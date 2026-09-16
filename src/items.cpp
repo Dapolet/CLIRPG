@@ -265,6 +265,10 @@ void Vault::equip(int itemIndex) {
 void Vault::unequip(Slot s) { equipped[slotIndex(s)] = -1; }
 
 void Vault::add(const Item& it) {
+    if (it.potionKind != PotionKind::None) {
+        addPotion(it);
+        return;
+    }
     Item copy = it;
     if (copy.uid <= 0) copy.uid = nextUid++;
     if (copy.consumable && copy.count <= 0) copy.count = 1;
@@ -371,6 +375,24 @@ int setPieces(const Vault& vault, SetId s) {
 // ---------------------------------------------------------------------------
 // loot generation
 // ---------------------------------------------------------------------------
+
+// Pick a set the current floor has unlocked (Titanic ≥10, Infernal ≥24,
+// Frostbound ≥45, Voidwalk ≥75), or None. ~45% of calls return a real set.
+SetId rollSet(int floor, core::Rng& rng) {
+    struct Entry { SetId id; int minFloor; };
+    static constexpr std::array<Entry, 4> kSets = {{
+        { SetId::Titanic,   10 },
+        { SetId::Infernal,  24 },
+        { SetId::Frostbound, 45 },
+        { SetId::Voidwalk,  75 },
+    }};
+    std::vector<SetId> unlocked;
+    for (const auto& s : kSets)
+        if (floor >= s.minFloor) unlocked.push_back(s.id);
+    if (unlocked.empty()) return SetId::None;
+    if (!rng.chance(0.45)) return SetId::None;
+    return unlocked[static_cast<std::size_t>(rng.pick(unlocked.size()))];
+}
 
 namespace {
 
@@ -579,7 +601,9 @@ std::vector<Item> rollLoot(int floor, bool boss, core::Rng& rng) {
     if (boss) {
         // promise (plan A2): at least one guaranteed epic+ piece
         out.push_back(makeGear(std::max(floor - 1, 1), rng));
-        out.push_back(makeGear(floor, rng, Rarity::Epic));
+        Item set = makeGear(floor, rng, Rarity::Epic);
+        set.setTag = rollSet(floor, rng);
+        out.push_back(set);
         return out;
     }
     const int potions = rng.roll(0, 1);
@@ -611,16 +635,13 @@ void reforge(Item& it, core::Rng& rng) {
 
 bool canAwaken(const Item& it) {
     if (it.isPot()) return false;
-    const int c = static_cast<int>(it.affixes.size());
-    return (it.rarity == Rarity::Rare && c < 2) ||
-           (it.rarity == Rarity::Epic && c < 3) ||
-           (it.rarity == Rarity::Legendary && c < 4);
+    return it.rarity >= Rarity::Rare && it.extraSockets == 0;
 }
 
 void awaken(Item& it, core::Rng& rng) {
+    (void)rng;
     if (!canAwaken(it)) return;
-    rerollAffixes(it, rng);
-    refreshName(it);
+    ++it.extraSockets;
 }
 
 bool socketRune(Item& it, const Rune& rune) {

@@ -11,11 +11,14 @@
 namespace rpg::game {
 
 void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& savePath,
-               const std::function<void()>& persist) {
+               const std::function<bool()>& persist) {
     const auto persistOrWrite = [&]() {
-        if (persist) persist();
-        else save::write(savePath, pc, vault);
+        const bool ok = persist ? persist() : save::write(savePath, pc, vault);
+        if (!ok)
+            std::cout << ui::color(ui::c::bad,
+                         "  [!] Could not write the save. Progress may be lost.") << "\n";
         glory::sync(pc, vault);
+        return ok;
     };
 
     while (true) {
@@ -78,6 +81,7 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
             const auto res = combat::fight(pc, vault, foes, rng);
 
             if (res.fled) {
+                vault.kills += res.kills;
                 retreated = true;
                 break;
             }

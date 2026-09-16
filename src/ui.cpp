@@ -878,7 +878,8 @@ void floorEvent(Character& pc, Vault& vault, int floor, core::Rng& rng) {
         }
         case 1: {
             panelTop("A Forgotten Cache", c::gold);
-            const int g = 10 * floor + rng.roll(5, 30);
+            const int base = 10 * floor + rng.roll(5, 30);
+            const int g = base + base * st.goldGainPct / 100;
             vault.gold += g;
             vault.totalGoldEarned += g;
             panelLine(color(c::gold, "  You pry the cache open:  " + std::to_string(g) + "  gold."));
@@ -941,7 +942,8 @@ void floorEvent(Character& pc, Vault& vault, int floor, core::Rng& rng) {
                                   + std::to_string(lost) + " gold vanishes."));
             } else {
                 vault.runes.push_back(makeRune(floor, rng));
-                const int g = rng.roll(4 * floor, 8 * floor);
+                const int base = rng.roll(4 * floor, 8 * floor);
+                const int g = base + base * st.goldGainPct / 100;
                 vault.gold += g;
                 vault.totalGoldEarned += g;
                 panelLine(color(c::gold, "  A trap pulls aside — "+ std::to_string(g) + " gold and a runestone wait inside."));
@@ -953,8 +955,10 @@ void floorEvent(Character& pc, Vault& vault, int floor, core::Rng& rng) {
             panelTop("A Whispering Mural", c::gold);
             const int xp = 25 + 15 * floor;
             pc.gainXp(xp, st.xpGainPct);
-            vault.gold += 20 + 5 * floor;
-            vault.totalGoldEarned += 20 + 5 * floor;
+            const int base = 20 + 5 * floor;
+            const int g = base + base * st.goldGainPct / 100;
+            vault.gold += g;
+            vault.totalGoldEarned += g;
             panelLine(color(c::gold, "  Runes on the wall teach you the floor's secrets.  +" + std::to_string(xp) + " XP."));
             panelBottom(c::gold);
             break;
@@ -1079,6 +1083,8 @@ bool merchantMenu(Character& pc, Vault& vault, core::Rng& rng) {
     const int mpPrice = 6 + 2 * floor;
     const int shardPrice = 12;
     const int essencePrice = 30;
+    const int setPrice = 150 + 40 * floor;
+    SetId stock = rollSet(floor, rng);   // curated set wares; None = nothing today
     while (true) {
         std::cout << "\n";
         panelTop("Merchant", c::gold);
@@ -1095,25 +1101,49 @@ bool merchantMenu(Character& pc, Vault& vault, core::Rng& rng) {
                   + color(c::arcane, "Essence") + "  " + gold(essencePrice));
         panelLine(chip(5) + std::string(gly(G_GOLD)) + " " + dim("Sell gear"));
         panelLine(chip(6) + std::string(gly(G_ESSENCE)) + " " + dim("Salvage gear"));
+        if (stock != SetId::None)
+            panelLine(chip(7) + std::string(gly(G_SWORD)) + " "
+                      + color(c::arcane, std::string(setName(stock)) + " set piece") + "  " + gold(setPrice));
         panelLine(dim(chip(0) + "back"));
         panelBottom(c::gold);
-        const int c = io::askInt("Buy", 0, 6);
+        const int maxOpt = stock != SetId::None ? 7 : 6;
+        const int c = io::askInt("Buy", 0, maxOpt);
         if (c == 0) return false;
         if (c == 5) { sellMenu(vault); continue; }
         if (c == 6) { salvageMenu(vault); continue; }
+        if (c == 7) {
+            if (stock == SetId::None) continue;
+            if (vault.gold < setPrice) {
+                std::cout << dim("  Not enough gold.\n");
+                continue;
+            }
+            vault.gold -= setPrice;
+            Item piece = makeGear(floor, rng, Rarity::Rare);
+            piece.setTag = stock;
+            vault.add(piece);
+            panelLine(color(c::arcane, gly(G_DI)) + " Bought "
+                      + color(rarityColor(piece.rarity), piece.describe()));
+            std::cout << "\n";
+            stock = SetId::None;
+            continue;
+        }
         Item buy;
         int price = 0;
         if (c == 1) { price = hpPrice; buy = makeVendorPotion(floor + rng.roll(0, 2), false); }
         else if (c == 2) { price = mpPrice; buy = makeVendorPotion(floor + rng.roll(0, 2), true); }
-        else if (c == 3) { price = shardPrice; vault.shards += 3; }
-        else if (c == 4) { price = essencePrice; vault.essence += 1; }
+        else if (c == 3) { price = shardPrice; }
+        else if (c == 4) { price = essencePrice; }
         if (price > 0) {
             if (vault.gold < price) {
                 std::cout << dim("  Not enough gold.\n");
                 continue;
             }
             vault.gold -= price;
-            if (c == 3 || c == 4) {
+            if (c == 3) {
+                vault.shards += 3;
+                panelLine(color(c::good, gly(G_DI)) + " Purchased");
+            } else if (c == 4) {
+                vault.essence += 1;
                 panelLine(color(c::good, gly(G_DI)) + " Purchased");
             } else {
                 vault.addPotion(buy);

@@ -72,6 +72,7 @@ struct Item {
     int power = 0;                 // weapon attack / armor defense
     std::vector<Affix> affixes;
     std::vector<Rune> runes;
+    int extraSockets = 0;          // bonus sockets granted by blacksmith Awaken
 
     bool consumable = false;
     PotionKind potionKind = PotionKind::None;
@@ -81,7 +82,7 @@ struct Item {
 
     bool isPot() const { return consumable; }
     bool stacks() const { return potionKind != PotionKind::None; }
-    int  freeSockets() const { return socketsFor(rarity) - static_cast<int>(runes.size()); }
+    int  freeSockets() const { return socketsFor(rarity) + extraSockets - static_cast<int>(runes.size()); }
     bool hasFreeSocket() const { return freeSockets() > 0; }
     std::string describe(int floor = 0) const;
 
@@ -145,6 +146,7 @@ int setPieces(const Vault& vault, SetId s);
 Item            makePotion(int pact, core::Rng& rng);
 Item            makeVendorPotion(int pact, bool mana);
 Item            makeGear(int floor, core::Rng& rng, Rarity minRarity = Rarity::Common);
+SetId           rollSet(int floor, core::Rng& rng);   // floor-unlocked set, or None
 std::vector<Item> rollLoot(int floor, bool boss, core::Rng& rng);
 Rune            makeRune(int floor, core::Rng& rng);
 std::vector<Rune> rollRunestoneLoot(int floor, bool boss, core::Rng& rng, bool boosted = false);

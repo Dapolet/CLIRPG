@@ -76,6 +76,7 @@ std::string itemToString(const Item& it) {
     for (const auto& r : it.runes)
         o += "|" + std::to_string(static_cast<int>(r.type)) + "|" + std::to_string(r.value);
     o += "|" + std::to_string(static_cast<int>(it.potionKind)) + "|" + std::to_string(it.count);
+    o += "|" + std::to_string(it.extraSockets);
     return o;
 }
 
@@ -122,6 +123,7 @@ Item stringToItem(const std::string& s) {
         it.potionKind = static_cast<PotionKind>(std::stoi(f[k]));
         it.count = std::stoi(f[k + 1]);
     }
+    if (k + 2 < f.size()) it.extraSockets = std::stoi(f[k + 2]);
     return it;
 }
 
@@ -181,12 +183,24 @@ bool write(const std::string& path, const Character& pc, Vault& vault) {
         body << "rune=" << static_cast<int>(r.type) << "|" << r.value << "\n";
 
     const std::string text = body.str();
-    std::ofstream f(path, std::ios::trunc);
-    if (!f) return false;
-    f << text;
-    f << "[sig]\n";
-    f << static_cast<int>(checksum(text)) << "\n";
-    return f.good();
+    const std::string tmp = path + ".tmp";
+    {
+        std::ofstream f(tmp, std::ios::trunc);
+        if (!f) return false;
+        f << text;
+        f << "[sig]\n";
+        f << static_cast<int>(checksum(text)) << "\n";
+        f.flush();
+        if (!f.good()) return false;
+    }
+    if (std::rename(tmp.c_str(), path.c_str()) != 0) {
+        std::remove(path.c_str());
+        if (std::rename(tmp.c_str(), path.c_str()) != 0) {
+            std::remove(tmp.c_str());
+            return false;
+        }
+    }
+    return true;
 }
 
 bool read(const std::string& path, Character* pc, Vault* vault) {
