@@ -11,9 +11,24 @@
 #include <random>
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using namespace rpg;
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD mode = 0;
+        if (GetConsoleMode(hOut, &mode))
+            SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+    }
+#endif
+
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--plain" || a == "--no-color" || a == "-p") ui::setForcePlain(true);

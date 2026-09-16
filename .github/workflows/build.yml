@@ -63,14 +63,27 @@ jobs:
         if: runner.os == 'Linux'
         run: ls -la ./build/clirpg-linux && file ./build/clirpg-linux
 
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: echo '3' | ./build/${{ matrix.binary_name }}
+
       - name: Verify binary (macOS)
         if: runner.os == 'macOS'
         run: ls -la ./build/clirpg-macos && file ./build/clirpg-macos
 
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        run: echo '3' | ./build/${{ matrix.binary_name }}
+
       - name: Verify binary (Windows)
         if: runner.os == 'Windows'
-        shell: msys2 {0}          # ← Also needs fixing here
+        shell: msys2 {0}
         run: ls -la ./build/clirpg-win.exe && file ./build/clirpg-win.exe
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: echo '3' | ./build/${{ matrix.binary_name }}.exe
 
       # --- Загружаем артефакт ---
       - name: Upload artifact
