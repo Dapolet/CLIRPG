@@ -100,7 +100,7 @@ bool colorEnabled();                           // NO_COLOR / TERM=dumb / piped â
 void setForcePlain(bool plain);                // --plain / tests
 int  layoutWidth();                            // clamped panel width (44..100)
 std::string wrap(const std::string& text, int width);   // word wrap, hard-splits long words
-std::string stripAnsi(const std::string& text);
+int displayWidth(const std::string& text);               // UTF-8 terminal column count
 std::string center(const std::string& text, int width);
 
 enum class CampResult { Descend, Quit, Ascend };
@@ -131,7 +131,7 @@ CampResult camp(Character& pc, Vault& vault, core::Rng& rng);
 void showCharacter(const Character& pc, const Vault& vault);
 void showVault(const Vault& vault, const std::vector<int>& gear);
 void equipMenu(Character& pc, Vault& vault);
-void spellBook(const Character& pc);
+void spellBook(const Character& pc, const Vault& vault);
 void recordsScreen(const Character& pc, const Vault& vault);
 void inventoryMenu(const Character& pc, Vault& vault);
 void beltMenu(Vault& vault);

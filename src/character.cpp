@@ -8,6 +8,8 @@ namespace rpg {
 
 namespace {
 
+constexpr int kMasteryCap = 150;
+
 Spell atk(std::string n, int cost, int cd, int pot, double lvl, int hits = 1,
           core::StatusEffect eff = core::StatusEffect::None, int turns = 0,
           int shred = 0, int stun = 0) {
@@ -105,6 +107,36 @@ std::vector<Spell> buildSpells(ClassId c) {
                                .potency = 9, .lvlScale = 2.5, .hits = 3,
                                .critBonusSelf = 120 });
             break;
+        case ClassId::Paladin:
+            // branch 0: Holy
+            s.push_back(atk("Smite", 2, 1, 3, 1.0));
+            s.push_back(atk("Holy Lance", 4, 2, 7, 2.0, 1, C::None, 0, 20));
+            s.push_back(atk("Judgement", 6, 3, 12, 3.0, 1, C::None, 0, 0, 20));
+            s.push_back(Spell{ .name = "Divine Wrath", .cost = 8, .cooldown = 4,
+                               .potency = 20, .lvlScale = 5.0, .effect = C::Vulnerable,
+                               .effectTurns = 3, .enemyVulnPct = 30 });
+            // branch 1: Order
+            s.push_back(Spell{ .name = "Mend", .type = SpellType::Heal, .cost = 2,
+                               .cooldown = 1, .healPower = 8, .lvlScale = 1.0 });
+            s.push_back(Spell{ .name = "Aegis", .type = SpellType::BuffSelf, .cost = 3,
+                               .cooldown = 3, .buffDefense = 50, .buffTurns = 2 });
+            s.push_back(Spell{ .name = "Sanctuary", .type = SpellType::Heal, .cost = 4,
+                               .cooldown = 3, .healPower = 12, .lvlScale = 1.4,
+                               .buffDefense = 30, .buffTurns = 2 });
+            s.push_back(Spell{ .name = "Consecrate", .type = SpellType::BuffSelf, .cost = 5,
+                               .cooldown = 5, .buffDefense = 100, .buffTurns = 2 });
+            // branch 2: Light
+            s.push_back(Spell{ .name = "Rebuke", .cost = 3, .cooldown = 2, .potency = 1,
+                               .lvlScale = 1.0, .effect = C::Enfeeble, .effectTurns = 3,
+                               .enemyAtkDownPct = 30 });
+            s.push_back(Spell{ .name = "Blessed Rally", .type = SpellType::Heal, .cost = 3,
+                               .cooldown = 3, .healPower = 8, .lvlScale = 1.0,
+                               .buffAttack = 25, .buffTurns = 2 });
+            s.push_back(Spell{ .name = "Radiant Brand", .cost = 5, .cooldown = 3, .potency = 6,
+                               .lvlScale = 1.6, .effect = C::Vulnerable, .effectTurns = 3,
+                               .enemyVulnPct = 30 });
+            s.push_back(atk("Sunburst", 8, 4, 14, 3.6, 1, C::Stun, 1, 0, 35));
+            break;
     }
     return s;
 }
@@ -115,10 +147,12 @@ const std::vector<Spell>& classSpells(ClassId c) {
     static const std::vector<Spell> warrior = buildSpells(ClassId::Warrior);
     static const std::vector<Spell> mage    = buildSpells(ClassId::Mage);
     static const std::vector<Spell> rogue   = buildSpells(ClassId::Rogue);
+    static const std::vector<Spell> paladin = buildSpells(ClassId::Paladin);
     switch (c) {
         case ClassId::Warrior: return warrior;
         case ClassId::Mage:    return mage;
         case ClassId::Rogue:   return rogue;
+        case ClassId::Paladin: return paladin;
     }
     return warrior;
 }
@@ -128,6 +162,7 @@ const char* className(ClassId c) {
         case ClassId::Warrior: return "Warrior";
         case ClassId::Mage:    return "Mage";
         case ClassId::Rogue:   return "Rogue";
+        case ClassId::Paladin: return "Paladin";
     }
     return "?";
 }
@@ -137,6 +172,7 @@ const char* resourceName(ClassId c) {
         case ClassId::Warrior: return "Stamina";
         case ClassId::Mage:    return "Mana";
         case ClassId::Rogue:   return "Energy";
+        case ClassId::Paladin: return "Conviction";
     }
     return "?";
 }
@@ -147,18 +183,19 @@ int spellDamage(const Spell& s, int level, int floor) {
     return std::max(1, static_cast<int>(base * core::enemyScale(floor)));
 }
 
-int spellHeal(const Spell& s, int level) {
-    return std::max(1, s.healPower + static_cast<int>(s.lvlScale * static_cast<double>(level)));
+int spellHeal(const Spell& s, int level, int floor) {
+    const int base = std::max(1, s.healPower + static_cast<int>(s.lvlScale * static_cast<double>(level)));
+    return std::max(1, static_cast<int>(base * core::enemyScale(floor)));
 }
 
 int resourceRegenPerTurn(ClassId c) {
     return c == ClassId::Mage ? 2 : 1;
 }
 
-std::string spellBlurb(const Spell& s, int level, int floor) {
+std::string spellBlurb(const Spell& s, int level, int floor, int attack) {
     std::string out;
     if (s.type == SpellType::Heal) {
-        out += "heals " + std::to_string(spellHeal(s, level)) + " HP";
+        out += "heals " + std::to_string(spellHeal(s, level, floor)) + " HP";
         if (s.buffAttack > 0)  out += ", +" + std::to_string(s.buffAttack) + "% ATK";
         if (s.buffDefense > 0) out += ", +" + std::to_string(s.buffDefense) + "% DEF";
         if (s.buffTurns > 0)   out += " " + std::to_string(s.buffTurns) + " turns";
@@ -170,7 +207,10 @@ std::string spellBlurb(const Spell& s, int level, int floor) {
     } else {
         if (s.element != core::Element::None)
             out += std::string(core::elementName(s.element)) + " ";
-        out += std::to_string(spellDamage(s, level, floor)) + " dmg";
+        int dmg = spellDamage(s, level, floor);
+        dmg = static_cast<int>(std::lround(static_cast<double>(dmg)
+                                           * (1.0 + static_cast<double>(attack) / 100.0)));
+        out += std::to_string(dmg) + " dmg";
         if (s.hits > 1) out += " x" + std::to_string(s.hits);
         if (s.armorShred > 0)  out += ", shreds " + std::to_string(s.armorShred) + " DEF";
         if (s.stunChancePct > 0) out += ", " + std::to_string(s.stunChancePct) + "% stun";
@@ -221,6 +261,7 @@ int baseMaxHp(ClassId c, int level) {
         case ClassId::Warrior: return 40 + (level - 1) * 7;
         case ClassId::Mage:    return 26 + (level - 1) * 4;
         case ClassId::Rogue:   return 30 + (level - 1) * 5;
+        case ClassId::Paladin: return 34 + (level - 1) * 6;
     }
     return 30;
 }
@@ -230,6 +271,7 @@ int baseResource(ClassId c, int level) {
         case ClassId::Warrior: return 14 + (level - 1) * 2;
         case ClassId::Mage:    return 20 + (level - 1) * 3;
         case ClassId::Rogue:   return 16 + (level - 1) * 3;
+        case ClassId::Paladin: return 16 + (level - 1) * 3;
     }
     return 16;
 }
@@ -239,6 +281,7 @@ int baseAttack(ClassId c, int level) {
         case ClassId::Warrior: return 7 + (level - 1) * 2;
         case ClassId::Mage:    return 4 + (level - 1) * 1;
         case ClassId::Rogue:   return 6 + (level - 1) * 2;
+        case ClassId::Paladin: return 6 + (level - 1) * 2;
     }
     return 6;
 }
@@ -248,6 +291,7 @@ int baseDefense(ClassId c, int level) {
         case ClassId::Warrior: return 3 + (level - 1);
         case ClassId::Mage:    return 1 + (level - 1) / 2;
         case ClassId::Rogue:   return 2 + (level - 1) / 2;
+        case ClassId::Paladin: return 2 + (level - 1);
     }
     return 2;
 }
@@ -257,6 +301,7 @@ int baseCrit(ClassId c, int level) {
         case ClassId::Warrior: return 5;
         case ClassId::Mage:    return 5;
         case ClassId::Rogue:   return 10 + (level - 1) / 4;
+        case ClassId::Paladin: return 5;
     }
     return 5;
 }
@@ -266,6 +311,7 @@ int baseCritBonus(ClassId c) {
         case ClassId::Warrior: return 10;
         case ClassId::Mage:    return 15;
         case ClassId::Rogue:   return 20;
+        case ClassId::Paladin: return 10;
     }
     return 10;
 }
@@ -286,7 +332,9 @@ EffectiveStats Character::stats(const Vault& vault) const {
     s.critChance   = baseCrit(classId_, level_);
     s.critBonus    = baseCritBonus(classId_);
 
-    int dmgPct = 0, defPct = 0, hpPct = 0, resPct = 0;
+    if (classId_ == ClassId::Paladin) s.healAmpPct += 25;
+
+    int dmgPct = 0, defPct = 0, hpPct = 0;
 
     for (const int e : vault.equipped) {
         if (!vault.hasItem(e)) continue;
@@ -316,12 +364,21 @@ EffectiveStats Character::stats(const Vault& vault) const {
                 case RuneType::Finesse:  s.critChance += r.value; break;
             }
         }
+        switch (it.relic) {
+            case RelicPower::Thorns:      s.thornsPct += 20; break;
+            case RelicPower::Potent:      s.potionBonusPct += 25; break;
+            case RelicPower::GoldenTouch: s.goldGainPct += 20; break;
+            case RelicPower::Dodge:       s.dodgeChance += 10; break;
+            case RelicPower::Aegis:       s.aegisGuard = std::max(s.aegisGuard, 50); break;
+            case RelicPower::Scavenger:   s.scavengePerKill += 1; break;
+            case RelicPower::None:
+            case RelicPower::kNumRelics:  break;
+        }
     }
 
     s.attack = s.attack + s.attack * dmgPct / 100;
     s.defense = s.defense + s.defense * defPct / 100;
     s.maxHp = s.maxHp + s.maxHp * hpPct / 100;
-    s.maxResource = s.maxResource + s.maxResource * resPct / 100;
 
     // Passive training (permanent, capped at kTrainMaxRank per discipline)
     s.attack      += 3 * training_[0];
@@ -336,6 +393,10 @@ EffectiveStats Character::stats(const Vault& vault) const {
     if (vault.perks[static_cast<std::size_t>(PerkId::Leeching)]) s.lifeStealPct += 2;
     if (vault.perks[static_cast<std::size_t>(PerkId::Bulwark)])  s.defense += 6;
     if (vault.perks[static_cast<std::size_t>(PerkId::Heirloom)]) s.goldGainPct += 20;
+    if (vault.perks[static_cast<std::size_t>(PerkId::Greed)])        s.lootBonusPct += 50;
+    if (vault.perks[static_cast<std::size_t>(PerkId::Regeneration)]) s.regenPerTurn += 2;
+    if (vault.perks[static_cast<std::size_t>(PerkId::Evasion)])      s.dodgeChance += 8;
+    if (vault.perks[static_cast<std::size_t>(PerkId::Bargain)])      s.vendorDiscountPct += 20;
 
     // Set bonuses (2-piece / 3-piece)
     const int titanic  = setPieces(vault, SetId::Titanic);
@@ -352,9 +413,10 @@ EffectiveStats Character::stats(const Vault& vault) const {
     if (voidwalk >= 2)      s.defense  += s.defense * 10 / 100;
 
     // compounding Rift Mastery — the endless-mode lever
-    const double aM = std::pow(1.08, static_cast<double>(vault.mastery));
-    const double hM = std::pow(1.06, static_cast<double>(vault.mastery));
-    const double rM = std::pow(1.05, static_cast<double>(vault.mastery));
+    const int mastery = std::min(vault.mastery, kMasteryCap);
+    const double aM = std::pow(1.08, static_cast<double>(mastery));
+    const double hM = std::pow(1.06, static_cast<double>(mastery));
+    const double rM = std::pow(1.05, static_cast<double>(mastery));
     s.attack = static_cast<int>(static_cast<double>(s.attack) * aM);
     s.maxHp = static_cast<int>(static_cast<double>(s.maxHp) * hM);
     s.maxResource = static_cast<int>(static_cast<double>(s.maxResource) * rM);

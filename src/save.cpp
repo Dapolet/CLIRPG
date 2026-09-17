@@ -77,6 +77,7 @@ std::string itemToString(const Item& it) {
         o += "|" + std::to_string(static_cast<int>(r.type)) + "|" + std::to_string(r.value);
     o += "|" + std::to_string(static_cast<int>(it.potionKind)) + "|" + std::to_string(it.count);
     o += "|" + std::to_string(it.extraSockets);
+    o += "|" + std::to_string(static_cast<int>(it.relic));
     return o;
 }
 
@@ -124,10 +125,11 @@ Item stringToItem(const std::string& s) {
         it.count = std::stoi(f[k + 1]);
     }
     if (k + 2 < f.size()) it.extraSockets = std::stoi(f[k + 2]);
+    if (k + 3 < f.size()) it.relic = static_cast<RelicPower>(std::stoi(f[k + 3]));
     return it;
 }
 
-bool write(const std::string& path, const Character& pc, Vault& vault) {
+bool write(const std::string& path, const Character& pc, Vault& vault, const core::Rng* rng) {
     vault.saveTime = static_cast<std::int64_t>(std::time(nullptr));
     const auto snap = pc.snapshot();
     std::ostringstream body;
@@ -151,6 +153,7 @@ bool write(const std::string& path, const Character& pc, Vault& vault) {
     }
     body << "\n";
     body << "hardcore=" << tag(snap.hardcore) << "\n";
+    if (rng) body << "rng=" << rng->save() << "\n";
 
     body << "[vault]\n";
     body << "gold=" << vault.gold << "\n";
@@ -203,7 +206,7 @@ bool write(const std::string& path, const Character& pc, Vault& vault) {
     return true;
 }
 
-bool read(const std::string& path, Character* pc, Vault* vault) {
+bool read(const std::string& path, Character* pc, Vault* vault, core::Rng* rng) {
     try {
     std::ifstream f(path);
     if (!f) return false;
@@ -218,7 +221,10 @@ bool read(const std::string& path, Character* pc, Vault* vault) {
     const int sig = std::atoi(data.substr(sigPos + sigTag.size()).c_str());
     if (sig != static_cast<int>(checksum(body))) return false;
 
-    if (body.rfind("RPGSAVE v" + std::to_string(kVersion), 0) != 0) return false;
+    const std::string verTag = "RPGSAVE v";
+    if (body.rfind(verTag, 0) != 0) return false;
+    const int fileVer = std::atoi(body.c_str() + verTag.size());
+    if (fileVer < kVersion - 1 || fileVer > kVersion) return false;
 
     std::istringstream is(body);
     std::string line;
@@ -281,6 +287,7 @@ bool read(const std::string& path, Character* pc, Vault* vault) {
                 }
             }
             else if (kv(line, "hardcore=", &val)) snap.hardcore = val == "1";
+            else if (kv(line, "rng=", &val)) { if (rng) rng->load(val); }
         }
     }
 

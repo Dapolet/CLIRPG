@@ -10,9 +10,11 @@
 namespace rpg {
 
 enum class Rarity      { Common, Uncommon, Rare, Epic, Legendary };
-enum class Slot        { Weapon, Armor, Ring, Amulet, Helm, Gloves, Boots };
+enum class Slot        { Weapon, Armor, Ring, Amulet, Helm, Gloves, Boots, Trinket };
 enum class ItemTier    { Iron, Steel, Mythril, Adamant, Void };
 enum class PotionKind  { None, Healing, Mana };
+enum class RelicPower  { None, Thorns, Potent, GoldenTouch, Dodge, Aegis, Scavenger,
+                         kNumRelics };
 enum class AffixType   {
     DamagePct, CritChance, CritBonus, LifeSteal,
     MaxHp, Defense, Regen,
@@ -23,9 +25,10 @@ enum class RuneType    { Power, Vitality, Warding, Flow, Finesse };
 // Set bonuses (2-piece / 3-piece) from matching equipped items.
 enum class SetId       { None, Titanic, Infernal, Frostbound, Voidwalk, kNumSets };
 // Rift Aspect perks — permanent, chosen once per Ascension.
-enum class PerkId      { Heirloom, Runeforge, Insight, Vitals, Leeching, Bulwark, kNumPerks };
+enum class PerkId      { Heirloom, Runeforge, Insight, Vitals, Leeching, Bulwark,
+                         Greed, Regeneration, Evasion, Bargain, kNumPerks };
 
-constexpr int kNumSlots  = 7;
+constexpr int kNumSlots  = 8;
 constexpr int kNumRarities = 5;
 constexpr int kNumTiers  = 5;
 constexpr int kNumAffixTypes = 10;
@@ -39,6 +42,7 @@ const char* affixName(AffixType t);
 const char* runeName(RuneType t);
 const char* setName(SetId s);
 const char* perkName(PerkId p);
+const char* relicPowerName(RelicPower r);
 Rarity     rarityByIndex(int i);
 ItemTier   tierByIndex(int i);
 int        tierUnlockFloor(ItemTier t);
@@ -68,6 +72,7 @@ struct Item {
     ItemTier tier = ItemTier::Iron;
     Rarity rarity = Rarity::Common;
     SetId setTag = SetId::None;
+    RelicPower relic = RelicPower::None;
     int iLvl = 1;
     int power = 0;                 // weapon attack / armor defense
     std::vector<Affix> affixes;
@@ -92,6 +97,7 @@ struct Item {
 int sellPrice(const Item& it);                   // 8·iLvl·(rarity+1)/2
 int salvageShards(const Item& it);               // 1 + iLvl/20 + 2·rarity
 int salvageEssence(const Item& it);              // 1 for Epic/Legendary
+int discountedCost(int cost, int discountPct);   // Bargain perk, never below 1
 
 // Potions are floor-agnostic templates: their effect is derived from the
 // player's CURRENT floor at use/display time, never stored at creation.
@@ -118,7 +124,7 @@ struct Vault {
     std::int64_t saveTime = 0;
 
     std::vector<Item> items;                    // bag + equipped together
-    std::array<int, kNumSlots> equipped = { -1, -1, -1, -1, -1, -1, -1 };  // index into items, -1 = empty
+    std::array<int, kNumSlots> equipped = { -1, -1, -1, -1, -1, -1, -1, -1 };  // index into items, -1 = empty
     std::vector<Rune> runes;                    // unbound runestones
     std::array<int, 2> belt = { 0, 0 };         // PotionKind code (+1), 0 = empty
     std::array<bool, static_cast<std::size_t>(PerkId::kNumPerks)> perks{};
@@ -146,6 +152,7 @@ int setPieces(const Vault& vault, SetId s);
 Item            makePotion(int pact, core::Rng& rng);
 Item            makeVendorPotion(int pact, bool mana);
 Item            makeGear(int floor, core::Rng& rng, Rarity minRarity = Rarity::Common);
+Item            makeTrinket(int floor, core::Rng& rng, Rarity minRarity = Rarity::Common);
 SetId           rollSet(int floor, core::Rng& rng);   // floor-unlocked set, or None
 std::vector<Item> rollLoot(int floor, bool boss, core::Rng& rng);
 Rune            makeRune(int floor, core::Rng& rng);

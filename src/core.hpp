@@ -4,6 +4,7 @@
 #include <concepts>
 #include <cstdint>
 #include <random>
+#include <string>
 
 namespace rpg::core {
 
@@ -19,6 +20,9 @@ public:
     double roll01();
     std::size_t pick(std::size_t n);
     bool chance(double p);
+
+    std::string save() const;              // full engine state (deterministic resume)
+    void load(const std::string& state);
 
 private:
     std::mt19937_64 gen_;

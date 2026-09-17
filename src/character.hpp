@@ -9,7 +9,7 @@
 
 namespace rpg {
 
-enum class ClassId { Warrior, Mage, Rogue };
+enum class ClassId { Warrior, Mage, Rogue, Paladin };
 
 const char* className(ClassId c);
 const char* resourceName(ClassId c);
@@ -41,9 +41,9 @@ struct Spell {
 // 12 spells per class; index = branch * 4 + depth. Built once, cached.
 const std::vector<Spell>& classSpells(ClassId c);
 int spellDamage(const Spell& s, int level, int floor);
-int spellHeal(const Spell& s, int level);
+int spellHeal(const Spell& s, int level, int floor);
 int resourceRegenPerTurn(ClassId c);
-std::string spellBlurb(const Spell& s, int level, int floor);   // one-line effect summary
+std::string spellBlurb(const Spell& s, int level, int floor, int attack);   // one-line effect summary
 
 // Passive training: a permanent skill-point sink available at camp.
 enum class TrainId { Might, Vitality, Focus, Tenacity, Fleetness, kNumTrains };
@@ -64,6 +64,14 @@ struct EffectiveStats {
     int lifeStealPct = 0;
     int xpGainPct = 0;
     int goldGainPct = 0;
+    int lootBonusPct = 0;
+    int dodgeChance = 0;
+    int vendorDiscountPct = 0;
+    int potionBonusPct = 0;
+    int thornsPct = 0;
+    int scavengePerKill = 0;
+    int aegisGuard = 0;
+    int healAmpPct = 0;
 };
 
 class Character {

@@ -17,6 +17,9 @@ int askInt(const std::string& prompt, int lo, int hi) {
         std::cout << prompt << " [" << lo << "-" << hi << "]: ";
         std::string line;
         if (!std::getline(std::cin, line)) return lo;
+        while (!line.empty() &&
+               (line.back() == '\r' || line.back() == ' ' || line.back() == '\t'))
+            line.pop_back();
         char* end = nullptr;
         const long v = std::strtol(line.c_str(), &end, 10);
         if (end == line.c_str() || end == nullptr || *end != '\0') continue;

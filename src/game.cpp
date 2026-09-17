@@ -13,7 +13,7 @@ namespace rpg::game {
 void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& savePath,
                const std::function<bool()>& persist) {
     const auto persistOrWrite = [&]() {
-        const bool ok = persist ? persist() : save::write(savePath, pc, vault);
+        const bool ok = persist ? persist() : save::write(savePath, pc, vault, &rng);
         if (!ok)
             std::cout << ui::color(ui::c::bad,
                          "  [!] Could not write the save. Progress may be lost.") << "\n";
@@ -171,7 +171,6 @@ void adventure(Character& pc, Vault& vault, core::Rng& rng, const std::string& s
             pc.restoreAll(st.maxHp, st.maxResource);
             std::cout << ui::color(ui::c::arcane, "You tear a new Rift open from Floor 1")
                       << " \u2014 Aspect " << vault.aspect << " heightens the darkness.\n";
-            persistOrWrite();
         }
 
         persistOrWrite();

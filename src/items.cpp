@@ -18,7 +18,7 @@ constexpr const char* kRarityNames[kNumRarities] = {
     "Common", "Uncommon", "Rare", "Epic", "Legendary",
 };
 constexpr const char* kSlotWords[kNumSlots] = {
-    "Weapon", "Armor", "Ring", "Amulet", "Helm", "Gloves", "Boots",
+    "Weapon", "Armor", "Ring", "Amulet", "Helm", "Gloves", "Boots", "Trinket",
 };
 constexpr const char* kWeaponBases[10] = {
     "Sword", "Axe", "Mace", "Dagger", "Warhammer",
@@ -38,6 +38,12 @@ constexpr const char* kBootsBases[6] = {
     "Sabatons", "Greaves", "Boots", "Treads", "Waders", "Sollerets",
 };
 constexpr const char* kTrinketBaseNames[2] = { "Ring", "Amulet" };
+constexpr const char* kRelicBaseNames[6] = {
+    "Charm", "Talisman", "Idol", "Sigil", "Relic", "Ward",
+};
+constexpr const char* kRelicPowerNames[static_cast<int>(RelicPower::kNumRelics) + 1] = {
+    "None", "Thorns", "Potent", "Golden Touch", "Dodge", "Aegis", "Scavenger", "?",
+};
 constexpr const char* kTierNames[kNumTiers] = {
     "Iron", "Steel", "Mythril", "Adamant", "Void",
 };
@@ -90,9 +96,15 @@ const char* setName(SetId s) {
 
 const char* perkName(PerkId p) {
     static const char* kPerkNames[] = {
-        "Heirloom", "Runeforge", "Insight", "Vitals", "Leeching", "Bulwark", "?"
+        "Heirloom", "Runeforge", "Insight", "Vitals", "Leeching", "Bulwark",
+        "Greed", "Regeneration", "Evasion", "Bargain", "?"
     };
     return kPerkNames[std::clamp(static_cast<int>(p), 0, static_cast<int>(PerkId::kNumPerks))];
+}
+
+const char* relicPowerName(RelicPower r) {
+    return kRelicPowerNames[std::clamp(static_cast<int>(r), 0,
+                                       static_cast<int>(RelicPower::kNumRelics))];
 }
 
 int socketsFor(Rarity r) {
@@ -180,14 +192,22 @@ const std::vector<PoolEntry>& poolFor(Slot s) {
         { AffixType::MaxHp,      3,  6, 0.30, &kWordsHp     },
         { AffixType::XpGain,     2,  5, 0.10, &kWordsXp     },
     };
+    static const std::vector<PoolEntry> trinket = {
+        { AffixType::MaxHp,      3,  8, 0.30, &kWordsHp     },
+        { AffixType::CritChance, 1,  4, 0.05, &kWordsCritC  },
+        { AffixType::CritBonus,  6, 16, 0.80, &kWordsCritB  },
+        { AffixType::LifeSteal,  1,  3, 0.05, &kWordsLeech  },
+        { AffixType::XpGain,     2,  8, 0.10, &kWordsXp     },
+    };
     switch (s) {
-        case Slot::Weapon: return weapon;
-        case Slot::Armor:  return armor;
-        case Slot::Ring:   return ring;
-        case Slot::Amulet: return amulet;
-        case Slot::Helm:   return helm;
-        case Slot::Gloves: return gloves;
-        case Slot::Boots:  return boots;
+        case Slot::Weapon:  return weapon;
+        case Slot::Armor:   return armor;
+        case Slot::Ring:    return ring;
+        case Slot::Amulet:  return amulet;
+        case Slot::Helm:    return helm;
+        case Slot::Gloves:  return gloves;
+        case Slot::Boots:   return boots;
+        case Slot::Trinket: return trinket;
     }
     return weapon;
 }
@@ -227,6 +247,7 @@ std::string Item::describe(int floor) const {
     std::string out = name + " [" + rarityName(rarity) + " " + tierName(tier) +
                       " iLvl " + std::to_string(iLvl) + "]";
     if (setTag != SetId::None) out += " [" + std::string(setName(setTag)) + " set]";
+    if (relic != RelicPower::None) out += " [" + std::string(relicPowerName(relic)) + "]";
     if (power > 0) out += " power " + std::to_string(power);
     if (!affixes.empty()) {
         out += " (";
@@ -350,7 +371,7 @@ bool Vault::hasItem(int idx) const {
 void Vault::clear() {
     gold = shards = essence = 0;
     items.clear();
-    equipped = { -1, -1, -1, -1, -1, -1, -1 };
+    equipped = { -1, -1, -1, -1, -1, -1, -1, -1 };
     belt = { 0, 0 };
     bestFloor = 1;
     bossesSlain = kills = deaths = legendaryFound = 0;
@@ -471,10 +492,13 @@ const char* gearBase(const Item& it) {
     const int seed = static_cast<int>(it.tier) * 13 + static_cast<int>(it.rarity) * 7
                    + it.iLvl * 5 + it.power;
     switch (it.slot) {
-        case Slot::Helm:   return kHelmBases[seed % 6];
-        case Slot::Gloves: return kGlovesBases[seed % 6];
-        case Slot::Boots:  return kBootsBases[seed % 6];
-        default:           return kTrinketBaseNames[slotIndex(it.slot) - 2];
+        case Slot::Helm:    return kHelmBases[seed % 6];
+        case Slot::Gloves:  return kGlovesBases[seed % 6];
+        case Slot::Boots:   return kBootsBases[seed % 6];
+        case Slot::Ring:
+        case Slot::Amulet:  return kTrinketBaseNames[slotIndex(it.slot) - 2];
+        case Slot::Trinket: return kRelicBaseNames[seed % 6];
+        default:            return kRelicBaseNames[seed % 6];
     }
 }
 
@@ -555,7 +579,7 @@ Item makeGear(int floor, core::Rng& rng, Rarity minRarity) {
     const int gap = std::min(floor / 5, 6);
     it.iLvl   = std::max(1, floor - rng.roll(0, gap));
 
-    const int s = rng.roll(0, kNumSlots - 1);
+    const int s = rng.roll(0, static_cast<int>(Slot::Boots));
     it.slot = static_cast<Slot>(s);
     if (it.slot == Slot::Weapon)
         it.power = baseTierPower(it.tier, true) + static_cast<int>(1.2 * static_cast<double>(it.iLvl - 1));
@@ -564,6 +588,23 @@ Item makeGear(int floor, core::Rng& rng, Rarity minRarity) {
     else
         it.power = 0;
 
+    rerollAffixes(it, rng);
+    refreshName(it);
+    return it;
+}
+
+Item makeTrinket(int floor, core::Rng& rng, Rarity minRarity) {
+    Item it;
+    it.consumable = false;
+    it.slot = Slot::Trinket;
+    it.rarity = rollRarity(floor, rng);
+    if (it.rarity < minRarity) it.rarity = minRarity;
+    it.tier = pickTier(floor, rng);
+    const int gap = std::min(floor / 5, 6);
+    it.iLvl = std::max(1, floor - rng.roll(0, gap));
+    it.power = 0;
+    it.relic = static_cast<RelicPower>(1 + rng.pick(static_cast<std::size_t>(
+        static_cast<int>(RelicPower::kNumRelics) - 1)));
     rerollAffixes(it, rng);
     refreshName(it);
     return it;
@@ -604,12 +645,15 @@ std::vector<Item> rollLoot(int floor, bool boss, core::Rng& rng) {
         Item set = makeGear(floor, rng, Rarity::Epic);
         set.setTag = rollSet(floor, rng);
         out.push_back(set);
+        out.push_back(makeTrinket(floor, rng, Rarity::Rare));
         return out;
     }
     const int potions = rng.roll(0, 1);
     for (int i = 0; i < potions; ++i) out.push_back(makePotion(floor, rng));
     const double rate = std::min(0.20 + 0.02 * static_cast<double>(floor), 0.85);
     if (rng.chance(rate)) out.push_back(makeGear(floor, rng));
+    const double relicRate = std::min(0.04 + 0.003 * static_cast<double>(floor), 0.18);
+    if (rng.chance(relicRate)) out.push_back(makeTrinket(floor, rng));
     return out;
 }
 
@@ -670,6 +714,11 @@ int salvageShards(const Item& it) {
 int salvageEssence(const Item& it) {
     if (it.isPot()) return 0;
     return it.rarity >= Rarity::Epic ? 1 : 0;
+}
+
+int discountedCost(int cost, int discountPct) {
+    if (discountPct <= 0) return cost;
+    return std::max(1, cost - cost * discountPct / 100);
 }
 
 int reforgeCost(const Item& it) {

@@ -85,6 +85,20 @@ jobs:
         shell: msys2 {0}
         run: echo '3' | ./build/${{ matrix.binary_name }}.exe
 
+      # --- Run the full unit-test suite (zero warnings enforced on Unix) ---
+      - name: Test suite (Linux)
+        if: runner.os == 'Linux'
+        run: make tests WERROR=1
+
+      - name: Test suite (macOS)
+        if: runner.os == 'macOS'
+        run: make tests WERROR=1
+
+      - name: Test suite (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: make tests WERROR=1
+
       # --- Загружаем артефакт ---
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -92,6 +106,16 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.binary_path }}
           retention-days: 30
+
+  # --- Sanitizer gate: the whole suite under ASan+UBSan (Linux only) ---
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: ASan+UBSan test suite (WERROR)
+        run: make tests_asan WERROR=1
 
   # --- Создаём GitHub Release с бинарниками при пуше тега v* ---
   release:

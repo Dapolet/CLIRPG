@@ -20,6 +20,9 @@ const char* enemyAffixName(EnemyAffix a) {
         case EnemyAffix::Ethereal:     return "Ethereal";
         case EnemyAffix::Berserker:    return "Berserker";
         case EnemyAffix::Cursed:       return "Cursed";
+        case EnemyAffix::Radiant:      return "Radiant";
+        case EnemyAffix::Hexer:        return "Hexer";
+        case EnemyAffix::Summoner:     return "Summoner";
         default:                       return "";
     }
 }
@@ -69,9 +72,10 @@ constexpr std::array<const char*, 10> kBossNames = {
     "Infernal Duke", "Abyssal Warden", "The Sunderer", "Nightmare Sovereign", "Eternal One",
 };
 
-constexpr std::array<EnemyAffix, 6> kAffixPool = {
+constexpr std::array<EnemyAffix, 9> kAffixPool = {
     EnemyAffix::Vampiric, EnemyAffix::Regenerating, EnemyAffix::Armored,
     EnemyAffix::Ethereal, EnemyAffix::Berserker,    EnemyAffix::Cursed,
+    EnemyAffix::Radiant,  EnemyAffix::Hexer,        EnemyAffix::Summoner,
 };
 
 constexpr std::array<core::Element, 3> kElements = {
@@ -301,14 +305,15 @@ int dealAttack(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
     int rage = 0;
     if (hasStatus(pb, core::StatusEffect::Rage, &rage))
         dmg *= (100.0 + static_cast<double>(rage)) / 100.0;
-    if (adrenaline > 0) {
+    if (hasStatus(pb, core::StatusEffect::Slow))
+        dmg *= 0.75;
+    if (adrenaline > 0)
         dmg *= 1.0 + 0.15 * static_cast<double>(adrenaline);
-        adrenaline = 0;
-    }
     if (e.has(EnemyAffix::Ethereal) && rng.chance(0.25)) {
         std::cout << "  " << e.name << " phases through your blade!\n";
         return 0;
     }
+    adrenaline = 0;
     dmg = core::mitigate(dmg, mitigatedDef(e, eb));
     if (rng.chance(static_cast<double>(st.critChance + critExtra) / 100.0))
         dmg = core::critValue(dmg, st.critBonus);
@@ -318,11 +323,13 @@ int dealAttack(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
     std::cout << ui::bold("  You strike ") << e.name
               << ui::color(ui::c::gold, " for " + std::to_string(dealt) + " damage") << ".\n";
     if (st.lifeStealPct > 0) {
-        const int steal = dealt * st.lifeStealPct / 100;
+        int steal = dealt * st.lifeStealPct / 100;
+        steal += steal * st.healAmpPct / 100;
         pc.healHp(steal, st.maxHp);
         std::cout << ui::color(ui::c::shine, "  (+" + std::to_string(steal) + " lifesteal)") << "\n";
     }
     if (e.has(EnemyAffix::Cursed)) pc.takeDamage(dealt * 35 / 100);
+    if (e.has(EnemyAffix::Radiant)) pc.takeDamage(dealt * 20 / 100);
     return dealt;
 }
 
@@ -337,10 +344,10 @@ int dealSpell(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
     int rage = 0;
     if (hasStatus(pb, core::StatusEffect::Rage, &rage))
         base *= (100.0 + static_cast<double>(rage)) / 100.0;
-    if (adrenaline > 0) {
+    if (hasStatus(pb, core::StatusEffect::Slow))
+        base *= 0.75;
+    if (adrenaline > 0)
         base *= 1.0 + 0.15 * static_cast<double>(adrenaline);
-        adrenaline = 0;
-    }
     int total = 0;
     for (int h = 0; h < s.hits; ++h) {
         double dmg = base * (0.9 + 0.2 * rng.roll01());
@@ -356,6 +363,7 @@ int dealSpell(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
         total += dealt;
         e.hp = std::max(0, e.hp - dealt);
     }
+    if (total > 0) adrenaline = 0;
     if (total > 0) {
         std::cout << ui::bold("  " + s.name);
         if (s.element != core::Element::None && e.align != core::Element::None) {
@@ -367,8 +375,13 @@ int dealSpell(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
                           + std::string(core::elementName(e.align)) + " foe");
         }
         std::cout << ui::color(ui::c::gold, " for " + std::to_string(total) + " damage") << ".\n";
-        if (st.lifeStealPct > 0) pc.healHp(total * st.lifeStealPct / 100, st.maxHp);
+        if (st.lifeStealPct > 0) {
+            int steal = total * st.lifeStealPct / 100;
+            steal += steal * st.healAmpPct / 100;
+            pc.healHp(steal, st.maxHp);
+        }
         if (e.has(EnemyAffix::Cursed)) pc.takeDamage(total * 35 / 100);
+        if (e.has(EnemyAffix::Radiant)) pc.takeDamage(total * 20 / 100);
     } else {
         std::cout << ui::dim("  The spell fizzles.") << "\n";
     }
@@ -377,16 +390,46 @@ int dealSpell(Character& pc, const EffectiveStats& st, std::vector<Timer>& pb,
 
 } // namespace
 
+int strikeOnce(Character& pc, const EffectiveStats& st, Enemy& e, core::Rng& rng,
+               int& adrenaline, int critExtra) {
+    std::vector<Timer> pb;
+    std::vector<Timer> eb;
+    return dealAttack(pc, st, pb, e, eb, rng, adrenaline, critExtra);
+}
+
+int castOnce(Character& pc, const EffectiveStats& st, const Spell& s, Enemy& e,
+             core::Rng& rng, int& adrenaline, int critExtra) {
+    std::vector<Timer> pb;
+    std::vector<Timer> eb;
+    return dealSpell(pc, st, pb, s, e, eb, rng, adrenaline, critExtra);
+}
+
+bool resolveSummon(Enemy& e, std::vector<Enemy>& enemies) {
+    if (e.summonUsed || !(e.boss || e.has(EnemyAffix::Summoner))) return false;
+    if (e.hp > e.hpMax / 2) return false;
+    e.summonUsed = true;
+    std::cout << ui::color(ui::c::arcane, "  " + e.name + " summons a Dark Thrall!") << "\n";
+    Enemy thrall;
+    thrall.name = "Dark Thrall";
+    thrall.hpMax = thrall.hp = std::max(4, e.hpMax / 4);
+    thrall.attack = std::max(2, e.attack / 2);
+    thrall.defense = e.defense / 2;
+    enemies.push_back(thrall);
+    return true;
+}
+
 Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng& rng) {
     Result res;
     const EffectiveStats st = pc.stats(vault);
     std::vector<Timer> pb;                        // player buffs/timers
     std::vector<std::vector<Timer>> eb(enemies.size());
     std::array<int, 12> cd{};
-    bool bossSummoned = false;
     int adrenaline = 0;
     int roundNum = 0;
     bool roundStarted = false;
+
+    if (st.aegisGuard > 0)
+        applyStatus(pb, core::StatusEffect::Guard, 3, st.aegisGuard);
 
     const auto anyAlive = [&enemies]() {
         for (const auto& e : enemies) if (e.alive()) return true;
@@ -444,7 +487,17 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                     else ++it;
                 }
             }
+            for (auto it = pb.begin(); it != pb.end();) {
+                if (!isDot(*it) || it->power <= 0) { ++it; continue; }
+                const int dot = it->power;
+                pc.takeDamage(dot);
+                std::cout << ui::color(ui::c::bad, "  " + std::string(core::statusName(it->eff))
+                          + " bites you for " + std::to_string(dot)) << ".\n";
+                if (--it->turns <= 0) it = pb.erase(it);
+                else ++it;
+            }
             roundStarted = true;
+            if (!pc.alive()) break;
             if (!anyAlive()) break;
         }
         const int critExtra = pc.classId() == ClassId::Rogue && roundNum == 0 ? 25 : 0;
@@ -499,8 +552,10 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                           + " has nothing to drink.") << "\n";
             } else {
                 const Item p = vault.items[static_cast<std::size_t>(vIdx)];
-                const int h = potionHeal(p, pc.currentFloor());
-                const int m = potionMana(p, pc.currentFloor());
+                int h = potionHeal(p, pc.currentFloor());
+                int m = potionMana(p, pc.currentFloor());
+                h += h * (st.potionBonusPct + st.healAmpPct) / 100;
+                m += m * st.potionBonusPct / 100;
                 if (h > 0) {
                     pc.healHp(h, st.maxHp);
                     std::cout << "  Restored " << h << " HP.\n";
@@ -530,9 +585,13 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
             };
             std::vector<PotOpt> pots;
             const auto addPot = [&](int idx, bool belt) {
-                if (idx >= 0 && vault.hasItem(idx) &&
-                    vault.items[static_cast<std::size_t>(idx)].isPot())
-                    pots.push_back({ idx, belt });
+                if (idx < 0 || !vault.hasItem(idx) ||
+                    !vault.items[static_cast<std::size_t>(idx)].isPot())
+                    return;
+                if (std::find_if(pots.begin(), pots.end(),
+                                 [&](const PotOpt& p) { return p.idx == idx; }) != pots.end())
+                    return;
+                pots.push_back({ idx, belt });
             };
             addPot(vault.beltIndex(0), true);
             addPot(vault.beltIndex(1), true);
@@ -563,8 +622,10 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 if (pick > 0) {
                     const int vIdx = pots[static_cast<std::size_t>(pick - 1)].idx;
                     const Item p = vault.items[static_cast<std::size_t>(vIdx)];
-                    const int h = potionHeal(p, pc.currentFloor());
-                    const int m = potionMana(p, pc.currentFloor());
+                    int h = potionHeal(p, pc.currentFloor());
+                    int m = potionMana(p, pc.currentFloor());
+                    h += h * (st.potionBonusPct + st.healAmpPct) / 100;
+                    m += m * st.potionBonusPct / 100;
                     if (h > 0) {
                         pc.healHp(h, st.maxHp);
                         std::cout << "  Restored " << h << " HP.\n";
@@ -592,7 +653,8 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                     const Spell& s = spells[static_cast<std::size_t>(learned[k])];
                     std::cout << ui::color(ui::c::shine, ui::chip(static_cast<int>(k + 1)))
                               << ui::bold(s.name)
-                              << ui::dim("  " + spellBlurb(s, pc.level(), pc.currentFloor())
+                              << ui::dim("  " + spellBlurb(s, pc.level(), pc.currentFloor(),
+                                                          st.attack)
                                          + "  (cost " + std::to_string(s.cost)
                                          + ", cd " + std::to_string(s.cooldown) + ")");
                     if (cd[static_cast<std::size_t>(learned[k])] > 0)
@@ -617,7 +679,8 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                         cd[static_cast<std::size_t>(idx)] = s.cooldown;
 
                         if (s.type == SpellType::Heal) {
-                            const int h = spellHeal(s, pc.level());
+                            int h = spellHeal(s, pc.level(), pc.currentFloor());
+                            h += h * st.healAmpPct / 100;
                             pc.healHp(h, st.maxHp);
                             std::cout << ui::color(ui::c::good, ui::bold("  " + s.name
                                       + " restores " + std::to_string(h) + " HP.")) << "\n";
@@ -689,18 +752,7 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                     continue;
                 }
 
-                if (enemies[i].boss && !bossSummoned && enemies[i].hp <= enemies[i].hpMax / 2) {
-                    bossSummoned = true;
-                    std::cout << ui::color(ui::c::arcane, "  " + enemies[i].name + " summons a Dark Thrall!") << "\n";
-                    const Enemy& src = enemies[i];
-                    Enemy thrall;
-                    thrall.name = "Dark Thrall";
-                    thrall.hpMax = thrall.hp = std::max(4, src.hpMax / 4);
-                    thrall.attack = std::max(2, src.attack / 2);
-                    thrall.defense = src.defense / 2;
-                    enemies.push_back(thrall);
-                    eb.emplace_back();
-                }
+                if (resolveSummon(enemies[i], enemies)) eb.emplace_back();
 
                 Enemy& e = enemies[i];
                 if (e.boss && e.hp <= e.hpMax / 4)
@@ -728,18 +780,43 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                     atk *= (100.0 - static_cast<double>(guard)) / 100.0;
                 const int cap = std::max(1, st.maxHp * 60 / 100);
                 const int dealt = std::clamp(static_cast<int>(atk), 1, cap);
-                pc.takeDamage(dealt);
-                std::cout << ui::color(ui::c::bad, "  " + e.name + " hits you for " + std::to_string(dealt))
-                          << (critical ? " (CRIT)" : "") << ".\n";
 
-                if (pc.classId() == ClassId::Warrior && pc.alive() && adrenaline < 3)
+                const bool dodged = st.dodgeChance > 0 && rng.chance(st.dodgeChance / 100.0);
+                if (dodged) {
+                    std::cout << ui::color(ui::c::good, "  You evade " + e.name + "'s attack.") << "\n";
+                } else {
+                    pc.takeDamage(dealt);
+                    std::cout << ui::color(ui::c::bad, "  " + e.name + " hits you for " + std::to_string(dealt))
+                              << (critical ? " (CRIT)" : "") << ".\n";
+
+                    if (e.has(EnemyAffix::Hexer) && pc.alive()) {
+                        const int roll = static_cast<int>(rng.pick(4));
+                        const core::StatusEffect eff =
+                            roll == 0 ? core::StatusEffect::Burn
+                                      : roll == 1 ? core::StatusEffect::Bleed
+                                                  : roll == 2 ? core::StatusEffect::Poison
+                                                              : core::StatusEffect::Slow;
+                        const bool dot = eff != core::StatusEffect::Slow;
+                        applyStatus(pb, eff, dot ? 3 : 2, dot ? std::max(1, st.maxHp / 20) : 0);
+                        std::cout << ui::color(ui::c::arcane, "  " + e.name + " hexes you: "
+                                  + core::statusName(eff) + "!") << "\n";
+                    }
+                }
+
+                if (pc.classId() == ClassId::Warrior && pc.alive() && adrenaline < 3 && !dodged)
                     ++adrenaline;
-                if (e.has(EnemyAffix::Vampiric))
+                if (e.has(EnemyAffix::Vampiric) && !dodged)
                     e.hp = std::min(e.hpMax, e.hp + dealt * 30 / 100);
                 if (e.has(EnemyAffix::Regenerating)) {
                     const int reg = std::max(1, e.hpMax / 15);
                     e.hp = std::min(e.hpMax, e.hp + reg);
                     std::cout << ui::color(ui::c::good, "  " + e.name + " regenerates " + std::to_string(reg) + " HP.") << "\n";
+                }
+                if (!dodged && st.thornsPct > 0 && e.alive()) {
+                    const int reflect = std::max(1, dealt * st.thornsPct / 100);
+                    e.hp = std::max(0, e.hp - reflect);
+                    std::cout << ui::color(ui::c::shine, "  Your thorns reflect "
+                              + std::to_string(reflect) + ".") << "\n";
                 }
 
                 tickTimers(eb[i]);
@@ -750,9 +827,14 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
         if (hasStatus(pb, core::StatusEffect::Regeneration)) {
             int p = 0;
             hasStatus(pb, core::StatusEffect::Regeneration, &p);
+            p += p * st.healAmpPct / 100;
             pc.healHp(p, st.maxHp);
         }
-        if (st.regenPerTurn > 0) pc.healHp(st.regenPerTurn, st.maxHp);
+        if (st.regenPerTurn > 0) {
+            int reg = st.regenPerTurn;
+            reg += reg * st.healAmpPct / 100;
+            pc.healHp(reg, st.maxHp);
+        }
         pc.restoreResource(resourceRegenPerTurn(pc.classId()) + st.manaRegenPerTurn,
                            st.maxResource);
         tickTimers(pb);
@@ -782,6 +864,9 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
             res.loot.shards += 2;
             res.loot.essence += 1;
         }
+        res.loot.shards += res.kills * st.scavengePerKill;
+        res.loot.shards += res.loot.shards * st.lootBonusPct / 100;
+        res.loot.essence += res.loot.essence * st.lootBonusPct / 100;
     }
     return res;
 }

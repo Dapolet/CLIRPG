@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -32,6 +33,7 @@ static const char* itemIcon(const Item& it) {
         case Slot::Boots:  return gly(G_BOOTS);
         case Slot::Ring:   return gly(G_RING);
         case Slot::Amulet: return gly(G_AMULET);
+        case Slot::Trinket: return gly(G_RING);
     }
     return gly(G_EMPTY);
 }
@@ -54,7 +56,7 @@ static bool slotInGroup(Slot s, int g) {
         case 1: return s == Slot::Weapon;
         case 2: return s == Slot::Armor || s == Slot::Helm ||
                        s == Slot::Gloves || s == Slot::Boots;
-        case 3: return s == Slot::Ring || s == Slot::Amulet;
+        case 3: return s == Slot::Ring || s == Slot::Amulet || s == Slot::Trinket;
     }
     return false;
 }
@@ -96,6 +98,7 @@ std::string passiveName(ClassId c) {
         case ClassId::Warrior: return "Adrenaline";
         case ClassId::Mage:    return "Arcane Flow";
         case ClassId::Rogue:   return "First Strike";
+        case ClassId::Paladin: return "Righteous Grace";
     }
     return "?";
 }
@@ -103,6 +106,7 @@ std::string passiveName(ClassId c) {
 std::string branchName(ClassId c, int b) {
     if (c == ClassId::Warrior) return b == 0 ? "Berserker" : b == 1 ? "Defender" : "Warcry";
     if (c == ClassId::Mage)    return b == 0 ? "Fire"      : b == 1 ? "Frost"    : "Arcane";
+    if (c == ClassId::Paladin) return b == 0 ? "Holy"      : b == 1 ? "Order"    : "Light";
     return                        b == 0 ? "Shadow"     : b == 1 ? "Poison"   : "Tricks";
 }
 
@@ -219,12 +223,12 @@ bool socketAction(Item& it, Vault& vault) {
     }
 }
 
-bool extractAction(Item& it, Vault& vault) {
+bool extractAction(Item& it, Vault& vault, int discountPct) {
     if (it.runes.empty()) {
         std::cout << dim("  Nothing socketed to extract.\n");
         return false;
     }
-    const int cost = runeExtractCost(it);
+    const int cost = discountedCost(runeExtractCost(it), discountPct);
     if (vault.gold < cost) {
         std::cout << dim("  Extraction costs " + std::to_string(cost) + "g. Not enough gold.\n");
         return false;
@@ -274,8 +278,57 @@ void setForcePlain(bool plain) { gForcePlain = plain; }
 
 int layoutWidth() { return std::clamp(terminalWidth(), 44, 100); }
 
+static int utf8Len(unsigned char c) {
+    if (c < 0x80) return 1;
+    if ((c & 0xE0) == 0xC0) return 2;
+    if ((c & 0xF0) == 0xE0) return 3;
+    if ((c & 0xF8) == 0xF0) return 4;
+    return 1;
+}
+
+static std::uint32_t utf8Codepoint(const std::string& s, std::size_t i, int len) {
+    std::uint32_t cp = static_cast<std::uint32_t>(
+        static_cast<unsigned char>(s[i]) & (0xFFu >> (len + 1)));
+    for (int k = 1; k < len && i + static_cast<std::size_t>(k) < s.size(); ++k)
+        cp = (cp << 6) | (static_cast<unsigned char>(s[i + static_cast<std::size_t>(k)]) & 0x3Fu);
+    return cp;
+}
+
+static int codepointWidth(std::uint32_t cp) {
+    if (cp == 0) return 0;
+    if ((cp >= 0x0300 && cp <= 0x036F) ||
+        (cp >= 0x200B && cp <= 0x200F) || cp == 0xFEFF)
+        return 0;
+    if ((cp >= 0x1100 && cp <= 0x115F) ||
+        (cp >= 0x2E80 && cp <= 0x303E) ||
+        (cp >= 0x3041 && cp <= 0x33FF) ||
+        (cp >= 0x3400 && cp <= 0x4DBF) ||
+        (cp >= 0x4E00 && cp <= 0x9FFF) ||
+        (cp >= 0xA000 && cp <= 0xA4CF) ||
+        (cp >= 0xAC00 && cp <= 0xD7A3) ||
+        (cp >= 0xF900 && cp <= 0xFAFF) ||
+        (cp >= 0xFE30 && cp <= 0xFE4F) ||
+        (cp >= 0xFF00 && cp <= 0xFF60) ||
+        (cp >= 0xFFE0 && cp <= 0xFFE6) ||
+        (cp >= 0x1F300 && cp <= 0x1FAFF) ||
+        (cp >= 0x20000 && cp <= 0x3FFFD))
+        return 2;
+    return 1;
+}
+
+int displayWidth(const std::string& text) {
+    int w = 0;
+    std::size_t i = 0;
+    while (i < text.size()) {
+        const int len = utf8Len(static_cast<unsigned char>(text[i]));
+        w += codepointWidth(utf8Codepoint(text, i, len));
+        i += static_cast<std::size_t>(len);
+    }
+    return w;
+}
+
 std::string wrap(const std::string& text, int width) {
-    if (width <= 0 || static_cast<int>(text.size()) <= width) return text;
+    if (width <= 0 || displayWidth(text) <= width) return text;
     std::string out;
     int col = 0;
     std::size_t i = 0;
@@ -288,16 +341,23 @@ std::string wrap(const std::string& text, int width) {
             if (text[i] == '\n') newline = true;
             ++i;
         }
-        const int w = static_cast<int>(word.size());
+        const int w = displayWidth(word);
         if (col > 0 && col + 1 + w > width) { out += '\n'; col = 0; }
         if (w > width) {
             for (std::size_t k = 0; k < word.size();) {
                 if (col > 0) { out += '\n'; col = 0; }
-                const std::size_t take = std::min<std::size_t>(static_cast<std::size_t>(width),
-                                                               word.size() - k);
+                std::size_t take = 0;
+                int taken = 0;
+                while (k + take < word.size()) {
+                    const int len = utf8Len(static_cast<unsigned char>(word[k + take]));
+                    const int cw = codepointWidth(utf8Codepoint(word, k + take, len));
+                    if (taken > 0 && taken + cw > width) break;
+                    take += static_cast<std::size_t>(len);
+                    taken += cw;
+                }
                 out += word.substr(k, take);
                 k += take;
-                col += static_cast<int>(take);
+                col += taken;
             }
         } else {
             if (col > 0) { out += ' '; ++col; }
@@ -309,24 +369,10 @@ std::string wrap(const std::string& text, int width) {
     return out;
 }
 
-std::string stripAnsi(const std::string& text) {
-    std::string out;
-    out.reserve(text.size());
-    const std::size_t n = text.size();
-    for (std::size_t i = 0; i < n; ++i) {
-        if (text[i] == '\x1b' && i + 1 < n && text[i + 1] == '[') {
-            i += 2;
-            while (i < n && text[i] != 'm') ++i;
-            continue;
-        }
-        out += text[i];
-    }
-    return out;
-}
-
 std::string center(const std::string& text, int width) {
-    if (width <= 0 || static_cast<int>(text.size()) >= width) return text;
-    const int pad = width - static_cast<int>(text.size());
+    const int tw = displayWidth(text);
+    if (width <= 0 || tw >= width) return text;
+    const int pad = width - tw;
     std::string out;
     out.reserve(text.size() + static_cast<std::size_t>(pad));
     for (int i = 0; i < pad / 2; ++i) out += ' ';
@@ -387,7 +433,7 @@ std::string hpMeter(int hp, int max, int width) {
 
 void panelTop(const std::string& title, int code) {
     const int inner = layoutWidth() - 2;
-    const int t = std::clamp(static_cast<int>(title.size()), 0, std::max(inner - 4, 4));
+    const int t = std::clamp(displayWidth(title), 0, std::max(inner - 4, 4));
     const int L = std::max(0, (inner - t) / 2 - 1);
     const int R = std::max(0, inner - t - L - 2);
     std::cout << color(code,
@@ -497,12 +543,14 @@ ClassId chooseClass() {
         panelLine(color(c::bad, chip(1)) + bold("Warrior") + dim("  stamina \u00b7 big hits \u00b7 shields"));
         panelLine(color(c::mana, chip(2)) + bold("Mage")    + dim("  mana \u00b7 elemental spells"));
         panelLine(color(c::arcane, chip(3)) + bold("Rogue")   + dim("  energy \u00b7 crits & poison"));
+        panelLine(color(c::good, chip(4)) + bold("Paladin")  + dim("  conviction \u00b7 holy power \u00b7 heals"));
         panelBottom();
-        const int c = io::askInt("Class", 1, 3);
+        const int c = io::askInt("Class", 1, 4);
         switch (c) {
             case 1: return ClassId::Warrior;
             case 2: return ClassId::Mage;
             case 3: return ClassId::Rogue;
+            case 4: return ClassId::Paladin;
         }
     }
 }
@@ -536,12 +584,16 @@ void choosePerk(Vault& vault) {
             const auto p = static_cast<PerkId>(i);
             std::string desc;
             switch (p) {
-                case PerkId::Heirloom:  desc = "  +20% gold from all sources"; break;
-                case PerkId::Runeforge: desc = "  runestones drop more often"; break;
-                case PerkId::Insight:   desc = "  +10% XP gain";               break;
-                case PerkId::Vitals:    desc = "  +8% max HP";                 break;
-                case PerkId::Leeching:  desc = "  +2% life steal";             break;
-                case PerkId::Bulwark:   desc = "  +6 defense";                 break;
+                case PerkId::Heirloom:     desc = "  +20% gold from all sources";       break;
+                case PerkId::Runeforge:    desc = "  runestones drop more often";        break;
+                case PerkId::Insight:      desc = "  +10% XP gain";                      break;
+                case PerkId::Vitals:       desc = "  +8% max HP";                        break;
+                case PerkId::Leeching:     desc = "  +2% life steal";                    break;
+                case PerkId::Bulwark:      desc = "  +6 defense";                        break;
+                case PerkId::Greed:        desc = "  +50% shards & essence from kills";  break;
+                case PerkId::Regeneration: desc = "  +2 HP regen each turn";             break;
+                case PerkId::Evasion:      desc = "  +8% chance to dodge attacks";       break;
+                case PerkId::Bargain:      desc = "  -20% shop and blacksmith prices";   break;
                 default: break;
             }
             if (vault.perks[static_cast<std::size_t>(i)])
@@ -635,7 +687,7 @@ void equipMenu(Character& pc, Vault& vault) {
         panelTop("Manage gear", c::accent);
         panelLine(chip(1) + color(c::neutral, std::string(gly(G_SWORD)) + " ") + "Weapons");
         panelLine(chip(2) + color(c::accent, std::string(gly(G_SHIELD)) + " ") + "Defenses  (armor, helm, gloves, boots)");
-        panelLine(chip(3) + color(c::arcane, std::string(gly(G_RING)) + " ") + "Trinkets  (rings, amulets)");
+        panelLine(chip(3) + color(c::arcane, std::string(gly(G_RING)) + " ") + "Trinkets  (rings, amulets, relics)");
         panelLine(dim(chip(0) + "back"));
         panelBottom();
         const int g = io::askInt("Group", 0, 3);
@@ -674,9 +726,10 @@ void equipMenu(Character& pc, Vault& vault) {
     }
 }
 
-void spellBook(const Character& pc) {
+void spellBook(const Character& pc, const Vault& vault) {
     const auto& spells = classSpells(pc.classId());
     const auto tree = pc.tree();
+    const int atk = pc.stats(vault).attack;
     std::cout << "\n";
     panelTop(std::string("Spell tree \u2014 ") + std::to_string(pc.skillPoints()) + " points", c::mana);
     for (int b = 0; b < 3; ++b) {
@@ -695,7 +748,7 @@ void spellBook(const Character& pc) {
                 const std::string head = "   " + color(c::accent, codeStr) + " "
                                        + color(c::gold, glyStr + " " + s.name);
                 const std::string wrapped = wrap(" \u2014 "
-                                                 + spellBlurb(s, pc.level(), pc.currentFloor()),
+                                                 + spellBlurb(s, pc.level(), pc.currentFloor(), atk),
                                                  budget);
                 const std::string pad(std::size_t(headLen), ' ');
                 std::size_t pos = 0;
@@ -771,14 +824,14 @@ bool passiveTrain(Character& pc) {
     }
 }
 
-bool spellTrainer(Character& pc) {
+bool spellTrainer(Character& pc, const Vault& vault) {
     while (true) {
-        spellBook(pc);
+        spellBook(pc, vault);
         std::cout << "  " << dim("Learn: ") << color(c::accent, "'<rank> <branch>'") << dim(", e.g. ")
                   << color(c::accent, "1 1") << dim("   ") << color(c::accent, "<P>") << dim(" passives")
                   << dim("   ") << color(c::accent, "<0>") << dim(" exit\n");
         std::string line;
-        std::getline(std::cin, line);
+        if (!std::getline(std::cin, line)) return false;
         if (line.empty()) continue;
         if (line[0] == '0') return false;
         if (line[0] == 'p' || line[0] == 'P') { passiveTrain(pc); continue; }
@@ -788,7 +841,8 @@ bool spellTrainer(Character& pc) {
         const Spell& s = pc.spell(b - 1, r - 1);
         if (pc.spendPoint(b - 1, r - 1)) {
             panelLine(color(c::mana, gly(G_DI)) + " Learned " + s.name
-                      + color(c::soft, "  \u2014 " + spellBlurb(s, pc.level(), pc.currentFloor())));
+                      + color(c::soft, "  \u2014 " + spellBlurb(s, pc.level(), pc.currentFloor(),
+                                                             pc.stats(vault).attack)));
             std::cout << "\n";
         } else {
             std::cout << dim("  Can't learn that (prerequisites or points).\n");
@@ -859,13 +913,13 @@ void recordsScreen(const Character& pc, const Vault& vault) {
     panelBottom(c::arcane);
     std::cout << dim("  (press enter to return)\n");
     std::string line;
-    std::getline(std::cin, line);
+    if (!std::getline(std::cin, line)) return;
 }
 
 void floorEvent(Character& pc, Vault& vault, int floor, core::Rng& rng) {
     const auto st = pc.stats(vault);
     std::cout << "\n";
-    const int kind = static_cast<int>(rng.pick(10));
+    const int kind = static_cast<int>(rng.pick(14));
     switch (kind) {
         case 0: {
             panelTop("A Glimmering Fountain", c::gold);
@@ -897,22 +951,27 @@ void floorEvent(Character& pc, Vault& vault, int floor, core::Rng& rng) {
         }
         case 3: {
             panelTop("A Hidden Trap!", c::bad);
-            const bool stumble = pc.hp() > 1;
-            const int d = stumble ? std::max(1, st.maxHp / 4) : 1;
-            if (stumble) pc.takeDamage(d);
-            panelLine(color(c::bad, "  Spike plates snap shut for " + std::to_string(d)
-                              + (stumble ? " damage." : " — but you barely dodge aside.")));
+            if (rng.chance(0.5)) {
+                panelLine(color(c::good, "  Spike plates snap shut \u2014 but you dive clear!"));
+            } else {
+                const int d = std::max(1, st.maxHp / 4);
+                pc.takeDamage(d);
+                panelLine(color(c::bad, "  Spike plates snap shut for "
+                                  + std::to_string(d) + " damage."));
+            }
             panelBottom(c::bad);
             break;
         }
         case 4: {
             panelTop("A Traveling Apothecary", c::mana);
+            const int brewPrice = discountedCost(40, st.vendorDiscountPct);
             panelLine(color(c::accent, "  She offers a freshly brewed Healing Draught."));
-            panelLine(chip(1) + " accept (40g)      " + dim(chip(0) + " decline"));
+            panelLine(chip(1) + " accept (" + std::to_string(brewPrice) + "g)      "
+                      + dim(chip(0) + " decline"));
             panelBottom(c::mana);
             const int pick = io::askInt("Choose", 0, 1);
-            if (pick == 1 && vault.gold >= 40) {
-                vault.gold -= 40;
+            if (pick == 1 && vault.gold >= brewPrice) {
+                vault.gold -= brewPrice;
                 vault.addPotion(makeVendorPotion(floor, false));
                 panelLine(color(c::good, gly(G_DI)) + " You buy the draught.");
                 std::cout << "\n";
@@ -971,6 +1030,106 @@ void floorEvent(Character& pc, Vault& vault, int floor, core::Rng& rng) {
             panelBottom(c::arcane);
             break;
         }
+        case 9: {
+            panelTop("A Blessing Altar", c::arcane);
+            panelLine(color(c::accent, "  Two runes rest on the altar \u2014 one warm, one cold."));
+            panelLine(chip(1) + " warm rune: mend wounds      " + chip(2) + " cold rune: claim a runestone");
+            panelBottom(c::arcane);
+            const int pick = io::askInt("Choose", 1, 2);
+            if (pick == 1) {
+                const int h = std::max(1, st.maxHp / 2);
+                pc.healHp(h, st.maxHp);
+                panelLine(color(c::good, "  Warm light knits your flesh.  +" + std::to_string(h) + " HP."));
+            } else {
+                vault.runes.push_back(makeRune(floor, rng));
+                panelLine(color(c::arcane, "  The cold rune crystallizes in your hand.  +1 rune."));
+            }
+            std::cout << "\n";
+            break;
+        }
+        case 10: {
+            panelTop("A Wandering Demon", c::bad);
+            panelLine(color(c::bad, "  It grins and rattles a cup of dice."));
+            if (vault.gold < 40) {
+                panelLine(dim("  You lack the 40 gold it demands. It slinks away."));
+                panelBottom(c::bad);
+                break;
+            }
+            panelLine(chip(1) + " wager 40 gold      " + dim(chip(0) + " refuse"));
+            panelBottom(c::bad);
+            const int pick = io::askInt("Choose", 0, 1);
+            if (pick != 1) {
+                panelLine(dim("  You wave it off; it vanishes in a puff of brimstone."));
+                std::cout << "\n";
+                break;
+            }
+            vault.gold -= 40;
+            const int roll = static_cast<int>(rng.pick(4));
+            if (roll == 0) {
+                vault.addPotion(makeVendorPotion(floor, false));
+                panelLine(color(c::good, "  The dice come up a vial:  +1 Healing Draught."));
+            } else if (roll == 1) {
+                vault.runes.push_back(makeRune(floor, rng));
+                panelLine(color(c::arcane, "  The dice come up a stone:  +1 rune."));
+            } else if (roll == 2) {
+                const int g = rng.roll(4 * floor, 8 * floor);
+                vault.gold += g;
+                vault.totalGoldEarned += g;
+                panelLine(color(c::gold, "  The dice come up coins:  +" + std::to_string(g) + " gold."));
+            } else {
+                panelLine(color(c::bad, "  The dice come up empty.  It cackles and is gone."));
+            }
+            std::cout << "\n";
+            break;
+        }
+        case 11: {
+            panelTop("An Abandoned Campfire", c::gold);
+            panelLine(color(c::accent, "  Embers still glow beneath the ash."));
+            panelLine(chip(1) + " rest: full heal      " + chip(2) + " burn a runestone for XP");
+            panelBottom(c::gold);
+            const int pick = io::askInt("Choose", 1, 2);
+            if (pick == 1) {
+                const int before = pc.hp();
+                pc.healHp(st.maxHp, st.maxHp);
+                panelLine(color(c::good, "  You rest by the fire.  +" + std::to_string(pc.hp() - before) + " HP."));
+            } else if (!vault.runes.empty()) {
+                vault.runes.pop_back();
+                const int xp = 40 + 20 * floor;
+                const int gained = xp + xp * st.xpGainPct / 100;
+                pc.gainXp(xp, st.xpGainPct);
+                panelLine(color(c::gold, "  You feed a runestone to the flame:  +" + std::to_string(gained) + " XP."));
+            } else {
+                panelLine(dim("  You have no runestone to burn."));
+            }
+            std::cout << "\n";
+            break;
+        }
+        case 12: {
+            panelTop("Echo of a Past Hero", c::mana);
+            panelLine(color(c::accent, "  A shade offers the relics it can no longer use."));
+            Item rare = makeGear(floor, rng, Rarity::Rare);
+            Item epic = makeGear(floor, rng, Rarity::Epic);
+            panelLine(chip(1) + " " + color(rarityColor(rare.rarity), rare.describe()));
+            panelLine(chip(2) + " " + color(rarityColor(epic.rarity), epic.describe()));
+            panelLine(chip(3) + " 2 runestones");
+            panelBottom(c::mana);
+            const int pick = io::askInt("Choose", 1, 3);
+            if (pick == 1) {
+                vault.add(rare);
+                panelLine(color(c::good, gly(G_DI)) + " You take the "
+                          + color(rarityColor(rare.rarity), rare.name) + ".");
+            } else if (pick == 2) {
+                vault.add(epic);
+                panelLine(color(c::good, gly(G_DI)) + " You take the "
+                          + color(rarityColor(epic.rarity), epic.name) + ".");
+            } else {
+                vault.runes.push_back(makeRune(floor, rng));
+                vault.runes.push_back(makeRune(floor, rng));
+                panelLine(color(c::arcane, "  You take two runestones."));
+            }
+            std::cout << "\n";
+            break;
+        }
         default: {
             panelTop("A Puzzling Obelisk", c::accent);
             panelLine(color(c::accent, "  Two runes glow — one grants fortune, one brings misfortune."));
@@ -1003,6 +1162,7 @@ bool blacksmith(Character& pc, Vault& vault, core::Rng& rng) {
     while (true) {
         std::cout << "\n";
         panelTop("Blacksmith", c::soft);
+        const int disc = pc.stats(vault).vendorDiscountPct;
         panelLine("  " + color(c::gold, "Gold ") + std::to_string(vault.gold)
                   + color(c::accent, "   Shards ") + std::to_string(vault.shards)
                   + color(c::arcane, "   Essence ") + std::to_string(vault.essence));
@@ -1019,11 +1179,11 @@ bool blacksmith(Character& pc, Vault& vault, core::Rng& rng) {
             std::string tag = equippedItem(vault, gear[k])
                               ? color(c::good, " [equipped]") : std::string();
             std::string hints;
-            hints += color(c::neutral, "  [1] upgrade " + shards(upgradeCost(it)));
-            hints += color(c::frost, "  [2] reforge " + gold(reforgeCost(it)));
-            if (canAwaken(it)) hints += color(c::arcane, "  [3] awaken " + std::to_string(awakenCost(it)) + " es");
+            hints += color(c::neutral, "  [1] upgrade " + shards(discountedCost(upgradeCost(it), disc)));
+            hints += color(c::frost, "  [2] reforge " + gold(discountedCost(reforgeCost(it), disc)));
+            if (canAwaken(it)) hints += color(c::arcane, "  [3] awaken " + std::to_string(discountedCost(awakenCost(it), disc)) + " es");
             if (it.freeSockets() > 0) hints += color(c::accent, "  [4] socket");
-            if (!it.runes.empty())   hints += color(c::flare, "  [5] extract " + gold(runeExtractCost(it)));
+            if (!it.runes.empty())   hints += color(c::flare, "  [5] extract " + gold(discountedCost(runeExtractCost(it), disc)));
             panelLine(chip(static_cast<int>(k + 1))
                       + itemIcon(it) + " "
                       + color(rarityColor(it.rarity), it.describe()) + tag);
@@ -1038,22 +1198,22 @@ bool blacksmith(Character& pc, Vault& vault, core::Rng& rng) {
         const int act = io::askInt("Action (0 back)", 0, 5);
         if (act == 0) continue;
         if (act == 1) {
-            if (vault.shards < upgradeCost(it))
+            if (vault.shards < discountedCost(upgradeCost(it), disc))
                 std::cout << dim("  Not enough shards.\n");
             else if (!canUpgrade(it, pc.currentFloor()))
                 std::cout << dim("  Item already at the floor cap.\n");
             else {
-                vault.shards -= upgradeCost(it);
+                vault.shards -= discountedCost(upgradeCost(it), disc);
                 upgrade(it);
                 panelLine(color(c::neutral, gly(G_SWORD)) + " Forged to iLvl " + std::to_string(it.iLvl)
                           + color(rarityColor(it.rarity), "  " + it.describe()));
                 std::cout << "\n";
             }
         } else if (act == 2) {
-            if (vault.gold < reforgeCost(it))
+            if (vault.gold < discountedCost(reforgeCost(it), disc))
                 std::cout << dim("  Not enough gold.\n");
             else {
-                vault.gold -= reforgeCost(it);
+                vault.gold -= discountedCost(reforgeCost(it), disc);
                 reforge(it, rng);
                 panelLine(color(c::frost, gly(G_DI)) + " Rerolled " + color(rarityColor(it.rarity), it.describe()));
                 std::cout << "\n";
@@ -1061,10 +1221,10 @@ bool blacksmith(Character& pc, Vault& vault, core::Rng& rng) {
         } else if (act == 3) {
             if (!canAwaken(it))
                 std::cout << dim("  Can't awaken that one.\n");
-            else if (vault.essence < awakenCost(it))
+            else if (vault.essence < discountedCost(awakenCost(it), disc))
                 std::cout << dim("  Not enough essence.\n");
             else {
-                vault.essence -= awakenCost(it);
+                vault.essence -= discountedCost(awakenCost(it), disc);
                 awaken(it, rng);
                 panelLine(color(c::arcane, std::string(gly(G_GEM)) + " Awakened ") + color(rarityColor(it.rarity), it.describe()));
                 std::cout << "\n";
@@ -1072,18 +1232,19 @@ bool blacksmith(Character& pc, Vault& vault, core::Rng& rng) {
         } else if (act == 4) {
             socketAction(it, vault);
         } else if (act == 5) {
-            extractAction(it, vault);
+            extractAction(it, vault, disc);
         }
     }
 }
 
 bool merchantMenu(Character& pc, Vault& vault, core::Rng& rng) {
     const int floor = pc.currentFloor();
-    const int hpPrice = 8 + 2 * floor;
-    const int mpPrice = 6 + 2 * floor;
-    const int shardPrice = 12;
-    const int essencePrice = 30;
-    const int setPrice = 150 + 40 * floor;
+    const int disc = pc.stats(vault).vendorDiscountPct;
+    const int hpPrice = discountedCost(8 + 2 * floor, disc);
+    const int mpPrice = discountedCost(6 + 2 * floor, disc);
+    const int shardPrice = discountedCost(12, disc);
+    const int essencePrice = discountedCost(30, disc);
+    const int setPrice = discountedCost(150 + 40 * floor, disc);
     SetId stock = rollSet(floor, rng);   // curated set wares; None = nothing today
     while (true) {
         std::cout << "\n";
@@ -1294,7 +1455,7 @@ CampResult camp(Character& pc, Vault& vault, core::Rng& rng) {
             case 3: merchantMenu(pc, vault, rng); break;
             case 4: equipMenu(pc, vault); break;
             case 5: beltMenu(vault); break;
-            case 6: spellTrainer(pc); break;
+            case 6: spellTrainer(pc, vault); break;
             case 7: respecMenu(pc, vault); break;
             case 8: inventoryMenu(pc, vault); break;
             case 9: {

@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
             vault.add(makePotion(1, rng));
             const auto st = pc.stats(vault);
             pc.restoreAll(st.maxHp, st.maxResource);
-            if (!save::write(savePath, pc, vault))
+            if (!save::write(savePath, pc, vault, &rng))
                 std::cout << ui::color(ui::c::bad,
                     "  [!] Could not write the save. Progress may be lost.") << "\n";
             glory::sync(pc, vault);
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
                 std::cout << "enters the Rift...\n";
             }
         } else {
-            if (!save::read(savePath, &pc, &vault)) {
+            if (!save::read(savePath, &pc, &vault, &rng)) {
                 if (std::filesystem::exists(savePath))
                     std::cout << "That save is corrupted; the Rift refuses it.\n";
                 else
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
             std::cout << ui::color(ui::c::good, "Welcome back, " + std::string(className(pc.classId())) + ".") << "\n";
         }
 
-        const auto persist = [&]() { return save::write(savePath, pc, vault); };
+        const auto persist = [&]() { return save::write(savePath, pc, vault, &rng); };
         game::adventure(pc, vault, rng, savePath, persist);
     }
 

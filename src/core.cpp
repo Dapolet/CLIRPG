@@ -1,5 +1,7 @@
 #include "core.hpp"
 
+#include <sstream>
+
 namespace rpg::core {
 
 int Rng::roll(int lo, int hi) {
@@ -21,6 +23,17 @@ std::size_t Rng::pick(std::size_t n) {
 
 bool Rng::chance(double p) {
     return roll01() < p;
+}
+
+std::string Rng::save() const {
+    std::ostringstream os;
+    os << gen_;
+    return os.str();
+}
+
+void Rng::load(const std::string& state) {
+    std::istringstream is(state);
+    is >> gen_;
 }
 
 const char* elementName(Element e) {

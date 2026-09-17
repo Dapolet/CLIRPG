@@ -31,7 +31,7 @@ Everything else below is the fine print.
 | `make` | Builds `./build/clirpg` (zero warnings). |
 | `./build/clirpg` | Play. |
 | `./build/clirpg --plain` (or `-p` / `--no-color`) | No ANSI color, ASCII glyphs — for logs, tests, SSH-over-pipes, screenshots. |
-| `make tests` | 12,732-check test suite. |
+| `make tests` | 18,582-check test suite. |
 | `make tests_asan` | The same suite under ASan/UBSan. |
 
 Panel width follows the terminal (`COLUMNS` or ioctl), clamped between **44 and 100
@@ -63,16 +63,16 @@ slot overwrites it (your call).
 
 ### Classes
 
-| | Warrior | Mage | Rogue |
-| --- | --- | --- | --- |
-| HP | 40 + 7/level | 26 + 4/level | 30 + 5/level |
-| Resource | Stamina (14 + 2/lvl) | Mana (20 + 3/lvl) | Energy (16 + 3/lvl) |
-| Resource regen/turn | +1 | +2 | +1 |
-| ATK | 7 + 2/lvl | 4 + 1/lvl | 6 + 2/lvl |
-| DEF | 3 + 1/lvl | 1 + (lvl-1)/2 | 2 + (lvl-1)/2 |
-| Crit chance | 5% | 5% | 10 + (lvl-1)/4 % |
-| Crit bonus dmg | +10% | +15% | +20% |
-| Passive | **Adrenaline** — each hit you take gives +15% to your next attack (stacks). | **Arcane Flow** — faster mana regen. | **First Strike** — +25% crit on round 1, and enemies are caught off-guard, skipping their first turn. |
+| | Warrior | Mage | Rogue | Paladin |
+| --- | --- | --- | --- | --- |
+| HP | 40 + 7/level | 26 + 4/level | 30 + 5/level | 34 + 6/level |
+| Resource | Stamina (14 + 2/lvl) | Mana (20 + 3/lvl) | Energy (16 + 3/lvl) | Conviction (16 + 3/lvl) |
+| Resource regen/turn | +1 | +2 | +1 | +1 |
+| ATK | 7 + 2/lvl | 4 + 1/lvl | 6 + 2/lvl | 6 + 2/lvl |
+| DEF | 3 + 1/lvl | 1 + (lvl-1)/2 | 2 + (lvl-1)/2 | 2 + 1/lvl |
+| Crit chance | 5% | 5% | 10 + (lvl-1)/4 % | 5% |
+| Crit bonus dmg | +10% | +15% | +20% | +10% |
+| Passive | **Adrenaline** — each hit you take gives +15% to your next attack (stacks). | **Arcane Flow** — faster mana regen. | **First Strike** — +25% crit on round 1, and enemies are caught off-guard, skipping their first turn. | **Righteous Grace** — all healing you receive (spells, potions, regen, lifesteal) is increased by 25%. |
 
 **Spell branches per class** (3 branches x 4 ranks each — see *Spells* for the full list):
 
@@ -81,6 +81,7 @@ slot overwrites it (your call).
 | Warrior | Berserker (damage) | Defender (tank/self-buff) | Warcry (support/debuffs) |
 | Mage | Fire | Frost | Arcane |
 | Rogue | Shadow (crit burst) | Poison (DoT/debuffs) | Tricks (multi-hit/burst) |
+| Paladin | Holy (damage) | Order (shields/heals) | Light (heals/debuffs) |
 
 ### Modes
 
@@ -102,7 +103,7 @@ XP #### 15/52  2 skill pt
 ATK 7  DEF 3  Crit 5%(+10)  Leech 0%  XP+0%
 Passive  Adrenaline
 Gold 74  Shards 1  Essence 0  Runestones 0
-Equipped: Weapon/ Armor/ Ring/ Amulet/ Helm/ Gloves/ Boots
+Equipped: Weapon/ Armor/ Ring/ Amulet/ Helm/ Gloves/ Boots/ Trinket
 ```
 
 The `(+N)` next to Crit is the *crit bonus* damage multiplier; Leech and XP% come from
@@ -116,7 +117,8 @@ affixes/runes/perks. Everything you see here is what combat actually uses.
 - **Elements**: *Fire → Frost → Arcane → Fire*. Weak to your element = `x1.3`, same
   element = `x0.7`, no element = neutral.
 - **XP needed per level**: `ceil(52 x level^1.75)`. **Enemy scaling**: `1.07^(floor-1)`.
-- **Level-up**: full HP/resource, base stats up, **+1 skill point**.
+- **Level-up**: base stats up, **+1 skill point**. HP/resource are *not* refilled — you
+  gain only the per-level increase and keep your current damage.
 
 ---
 
@@ -160,7 +162,10 @@ commits your turn.
 | Armored | High defense — shred it or use spell damage. |
 | Ethereal | Sometimes phases out of damage (chance to dodge). |
 | Berserker | Rages — hits harder as it takes damage. |
-| Cursed | Debuffs you when it acts. |
+| Cursed | Reflects 35% of the damage you deal back at you. |
+| Radiant | Reflects 20% of the damage you deal back at you. |
+| Hexer | Its hits inflict a random Burn/Bleed/Poison/Slow on you. |
+| Summoner | At half HP, summons one Dark Thrall (once per fight). |
 
 **Elites** (from floor 4, up to ~35% by mid-game) are rare-size normal monsters with
 extra crit, extra HP, and extra XP. **Multi-monster packs** appear from floor 5 (45%).
@@ -192,26 +197,26 @@ You start with 2 points and get 1 per level.
 **Berserker**
 | Rank | Spell | Cost | CD | Effect |
 | --- | --- | --- | --- | --- |
-| 1 | Cleave | 3 res | - | 3-4 dmg |
-| 2 | Whirlwind | 7 res | 2 | 7-9 dmg x2 (hits twice) |
-| 3 | Executioner | 12 res | 3 | 12-15 dmg + Bleed 3 turns |
-| 4 | Bloodrage | 8 res | 4 | 20-25 dmg + Bleed, always |
+| 1 | Cleave | 2 res | 1 | 3-4 dmg |
+| 2 | Whirlwind | 4 res | 2 | 8-9 dmg x2 (hits twice) |
+| 3 | Executioner | 6 res | 3 | 13-16 dmg + Bleed 3 turns, shreds 20 DEF |
+| 4 | Bloodrage | 8 res | 4 | 22-27 dmg + Bleed, always |
 
 **Defender**
 | Rank | Spell | Cost | CD | Effect |
 | --- | --- | --- | --- | --- |
-| 1 | Shield Slam | 2 res | - | 2-3 dmg, +20 DEF 1 turn |
+| 1 | Shield Slam | 2 res | 1 | 2-3 dmg, shreds 30 DEF, 20% stun |
 | 2 | Iron Skin | 3 res | 3 | +60% DEF for 2 turns (buff) |
-| 3 | Bastion | 4 res | 3 | heal 10-11 HP +30% DEF 2 turns |
+| 3 | Bastion | 4 res | 3 | heal 11 HP +30% DEF 2 turns |
 | 4 | Bulwark | 5 res | 5 | +100% DEF for 2 turns |
 
 **Warcry**
 | Rank | Spell | Cost | CD | Effect |
 | --- | --- | --- | --- | --- |
-| 1 | Demoralize | 1 res | - | 1-2 dmg, 40% to drop enemy ATK |
-| 2 | Rally | 3 res | 3 | heal 8-9 HP +25% ATK 2 turns |
+| 1 | Demoralize | 3 res | 2 | 1-2 dmg, shreds 40 DEF, 10% stun |
+| 2 | Rally | 3 res | 3 | heal 9 HP +25% ATK 2 turns |
 | 3 | War Horn | 4 res | 4 | +50% ATK for 3 turns (self) |
-| 4 | Cripple | 3 res | 2 | Enfeeble 3 turns, enemy ATK -35% |
+| 4 | Cripple | 3 res | 2 | 2-3 dmg + Enfeeble 3 turns, enemy ATK -35% |
 
 *(damage ranges scale with level via each spell's level multiplier — the table is at
 level 1.)*
@@ -221,26 +226,26 @@ level 1.)*
 **Fire**
 | Rank | Spell | Cost | CD | Effect |
 | --- | --- | --- | --- | --- |
-| 1 | Firebolt | 4 res | - | 4-5 dmg + Burn 2 |
-| 2 | Meteor | 9 res | - | 9-12 dmg + Burn 3 |
-| 3 | Inferno | 16 res | - | 16-20 dmg + Burn 3 |
-| 4 | Pyroclasm | 9 res | 4 | 22-28 dmg + Burn 3 |
+| 1 | Firebolt | 2 res | 1 | 4-5 dmg + Burn 2 |
+| 2 | Meteor | 4 res | 2 | 10-13 dmg + Burn 3 |
+| 3 | Inferno | 7 res | 3 | 18-22 dmg + Burn 3 |
+| 4 | Pyroclasm | 9 res | 4 | 25-30 dmg + Burn 3 |
 
 **Frost**
 | Rank | Spell | Cost | CD | Effect |
 | --- | --- | --- | --- | --- |
-| 1 | Frostbolt | 3 res | - | 3-4 dmg + Slow 1 |
-| 2 | Ice Nova | 6 res | - | 6-8 dmg + Slow 2, 30% stun |
-| 3 | Blizzard | 11 res | - | 11-14 dmg x2, Slow 2, 25% stun |
-| 4 | Absolute Zero | 8 res | 4 | 14-18 dmg + Slow 3, 40% stun |
+| 1 | Frostbolt | 2 res | 1 | 3-4 dmg + Slow 1 |
+| 2 | Ice Nova | 4 res | 2 | 7-8 dmg + Slow 2, 30% stun |
+| 3 | Blizzard | 6 res | 3 | 12-15 dmg x2, Slow 2, 25% stun |
+| 4 | Absolute Zero | 8 res | 4 | 16-19 dmg + Slow 3, 40% stun |
 
 **Arcane**
 | Rank | Spell | Cost | CD | Effect |
 | --- | --- | --- | --- | --- |
-| 1 | Arcane Missiles | 2 res | - | 2-3 dmg x3 |
-| 2 | Arcane Barrage | 6 res | - | 6-8 dmg, 25% stun |
-| 3 | Disintegrate | 14 res | - | 14-18 dmg, 40% stun |
-| 4 | Hex | 6 res | 3 | Vulnerable 3 turns, enemy takes +30% |
+| 1 | Arcane Missiles | 3 res | 1 | 2-3 dmg x3 |
+| 2 | Arcane Barrage | 5 res | 2 | 7-8 dmg, shreds 25 DEF |
+| 3 | Disintegrate | 8 res | 4 | 16-19 dmg, shreds 40 DEF |
+| 4 | Hex | 6 res | 3 | 7-8 dmg + Vulnerable 3 turns, enemy takes +30% |
 
 *(All Mage spells are element-typed — Fire/Frost/Arcane branches respectively.)*
 
@@ -251,24 +256,50 @@ level 1.)*
 | --- | --- | --- | --- | --- |
 | 1 | Backstab | 2 res | 1 | 4-5 dmg, +40% crit self |
 | 2 | Vanish | 3 res | 4 | +40% DEF 1 turn + Guard |
-| 3 | Shadow Step | 6 res | 3 | 9-12 dmg x2, +60% crit self |
-| 4 | Shadow Dance | 8 res | 4 | 8-10 dmg x3, +100% crit self |
+| 3 | Shadow Step | 6 res | 3 | 10-13 dmg x2, +60% crit self |
+| 4 | Shadow Dance | 8 res | 4 | 9-11 dmg x3, +100% crit self |
 
 **Poison**
 | Rank | Spell | Cost | CD | Effect |
 | --- | --- | --- | --- | --- |
-| 1 | Venom Blade | 2 res | - | 2-3 dmg + Poison 3 |
-| 2 | Corrosive Slash | 3 res | - | 3-4 dmg + Poison 2, 60% shred |
-| 3 | Plague Sting | 8 res | - | 8-10 dmg + Poison 4, 30% shred |
-| 4 | Crippling Venom | 6 res | 3 | Poison 3, enemy ATK -30% |
+| 1 | Venom Blade | 2 res | 1 | 2-3 dmg + Poison 3 |
+| 2 | Corrosive Slash | 4 res | 2 | 3-4 dmg + Poison 2, 60% shred |
+| 3 | Plague Sting | 6 res | 3 | 9-11 dmg + Poison 4, 30% shred |
+| 4 | Crippling Venom | 6 res | 3 | 3-4 dmg + Poison 3, enemy ATK -30% |
 
 **Tricks**
 | Rank | Spell | Cost | CD | Effect |
 | --- | --- | --- | --- | --- |
-| 1 | Double Strike | 3 res | - | 3-4 dmg x2 |
+| 1 | Double Strike | 3 res | 2 | 3-4 dmg x2 |
 | 2 | Perfect Evasion | 3 res | 4 | +60% DEF 2 turns + Guard |
-| 3 | Lethal Flourish | 7 res | 3 | 10-13 dmg x2, +80% crit self |
-| 4 | Masterstroke | 9 res | 4 | 9-12 dmg x3, +120% crit self |
+| 3 | Lethal Flourish | 7 res | 3 | 11-14 dmg x2, +80% crit self |
+| 4 | Masterstroke | 9 res | 4 | 10-13 dmg x3, +120% crit self |
+
+### Paladin
+
+**Holy**
+| Rank | Spell | Cost | CD | Effect |
+| --- | --- | --- | --- | --- |
+| 1 | Smite | 2 res | 1 | 3-4 dmg |
+| 2 | Holy Lance | 4 res | 2 | 8-9 dmg, shreds 20 DEF |
+| 3 | Judgement | 6 res | 3 | 13-16 dmg, 20% stun |
+| 4 | Divine Wrath | 8 res | 4 | 22-27 dmg + Vulnerable 3 turns, enemy takes +30% |
+
+**Order**
+| Rank | Spell | Cost | CD | Effect |
+| --- | --- | --- | --- | --- |
+| 1 | Mend | 2 res | 1 | heal 9 HP |
+| 2 | Aegis | 3 res | 3 | +50% DEF for 2 turns (buff) |
+| 3 | Sanctuary | 4 res | 3 | heal 13 HP +30% DEF 2 turns |
+| 4 | Consecrate | 5 res | 5 | +100% DEF for 2 turns |
+
+**Light**
+| Rank | Spell | Cost | CD | Effect |
+| --- | --- | --- | --- | --- |
+| 1 | Rebuke | 3 res | 2 | 1-2 dmg + Enfeeble 3 turns, enemy ATK -30% |
+| 2 | Blessed Rally | 3 res | 3 | heal 9 HP +25% ATK 2 turns |
+| 3 | Radiant Brand | 5 res | 3 | 7-8 dmg + Vulnerable 3 turns, enemy takes +30% |
+| 4 | Sunburst | 8 res | 4 | 16-19 dmg, 35% stun |
 
 Spell damage = `max(1, round(potency + lvlScale x level) x enemyScale(floor))`, where
 `enemyScale(floor) = 1.07^(floor-1)` — the same curve enemies use for HP/attack. The
@@ -290,8 +321,8 @@ From the trainer's passive screen (`P`), permanent, 1 skill point per rank, max 
 | Tenacity | +1 DEF |
 | Fleetness | +1 HP regen / turn |
 
-**Respec** (camp 7) refunds all skill points for a gold fee (base ~40g, scales with
-investment). The spell tree displayed shows exactly what refund you'll get.
+**Respec** (camp 7) refunds all skill points for a gold fee of `25 + 15 x level` (scales
+with your level). The spell tree displayed shows exactly what refund you'll get.
 
 ---
 
@@ -319,8 +350,8 @@ investment). The spell tree displayed shows exactly what refund you'll get.
 
 ### What makes an item
 
-- **Slots**: Weapon, Armor, Ring, Amulet, Helm, Gloves, Boots (weapons add ATK, defenses
-  add DEF).
+- **Slots**: Weapon, Armor, Ring, Amulet, Helm, Gloves, Boots, Trinket (weapons add ATK,
+  defenses add DEF; trinkets carry a **relic power** instead of raw power).
 - **Power**: the flat stat of the slot — bigger is better.
 - **Affixes** (the good stuff): Damage %, Crit Chance, Crit Bonus, Life Steal, Max HP,
   Defense, HP Regen, Mana, Mana Regen, XP Gain.
@@ -341,11 +372,25 @@ investment). The spell tree displayed shows exactly what refund you'll get.
 Set identity shows on the item (`[Set: Titanic]`); mix-and-match is legal but the
 bonuses reward focusing one set.
 
+### Relics & trinkets (the 8th slot)
+
+Trinkets occupy their own **Trinket** slot and are defined by the **relic power** rolled
+onto them. Bosses always drop one, and normal loot occasionally does too. Their powers:
+
+| Relic power | Effect |
+| --- | --- |
+| Thorns | Reflect 20% of the damage you take back at the attacker. |
+| Potent | Potions restore 25% more HP and resource. |
+| Golden Touch | +20% gold from kills. |
+| Dodge | +10% chance to evade enemy attacks. |
+| Aegis | Start every fight with Guard (−50% damage taken) for 3 turns. |
+| Scavenger | +1 shard for every enemy slain. |
+
 ### The blacksmith (camp 2)
 
 | Action | Cost | What it does |
 | --- | --- | --- |
-| Upgrade | `5 x (tier+1) + iLvl/2` shards | Raise item power / rarity step. |
+| Upgrade | `5 x (tier+1) + iLvl/2` shards | Raise item power / iLvl (rarity unchanged). |
 | Reforge | `25 x (rarity+1) x (1 + iLvl/8)` gold | Reroll the affix(es). |
 | Socket | a runestone | Insert a rune (only if the item has a socket). |
 | Awaken | `50 x (rarity+1) x (1 + iLvl/8)` essence | Item enchantment step up. |
@@ -368,9 +413,9 @@ into gear; extractable. A rune's value scales with the floor it dropped on.
 
 ### The merchant (camp 3)
 
-Healing Draught (10g), Mana Draught (8g), Shards x3 (12g), Essence (30g), plus Sell and
-Salvage. Potions are **floor-scaled**: the deeper you go, the bigger the heal. Same goes
-for dropped potions.
+Healing Draught (`8 + 2 x floor` gold), Mana Draught (`6 + 2 x floor` gold), Shards x3
+(12g), Essence (30g), plus Sell and Salvage. Potions are **floor-scaled**: the deeper you
+go, the bigger the heal. Same goes for dropped potions.
 
 ### The belt (camp 5)
 
@@ -406,13 +451,17 @@ is consumed from inventory.
 | A Glimmering Fountain | Restore 1/3 HP + half resource. |
 | A Forgotten Cache | Gold (scales with floor). |
 | A Rune-Fall | 1-2 runestones. |
-| A Hidden Trap | Burst damage (1/4 max HP) or dodge. |
+| A Hidden Trap | 50% chance to dodge; on a hit, lose 1/4 max HP. |
 | A Traveling Apothecary | Buy a Healing Draught for 40g (or decline). |
 | A Fading Shrine | 1 runestone + 1/5 max HP restored. |
 | A Hexed Chest | 50/50: trap (damage + lost gold) or gold + runestone. |
 | A Whispering Mural | XP + gold (scales with floor). |
 | A Storm of Runes | 2 runestones + half resource. |
 | A Puzzling Obelisk | Pick a rune: fortune (shards + heal) or misfortune (damage). |
+| A Blessing Altar | Choose: heal 1/2 max HP, or claim 1 runestone. |
+| A Wandering Demon | Wager 40g: healing draught, runestone, extra gold, or nothing. |
+| An Abandoned Campfire | Choose: full heal, or burn 1 runestone for XP. |
+| Echo of a Past Hero | Choose: a Rare or Epic item, or 2 runestones. |
 
 Events are **risk/reward**; shrines and storms are pure upside, the cache/fountain/mural
 are near-guaranteed upside, the chest and obelisk are gambles, and the trap is the Rift
@@ -427,8 +476,9 @@ collecting its toll.
 - **Rift Aspects**: collect from grinding floors; each Ascension adds one.
 - **Ascension** (Floor 100+, camp 11): +1 aspect, pick a **Rift Aspect perk**
   (Heirloom +20% gold, Runeforge more runestone drops, Insight +10% XP, Vitals +8% max HP,
-  Leeching +2% life steal, Bulwark +6 DEF), reset to Floor 1, full heal, and the Rift
-  grows stronger.
+  Leeching +2% life steal, Bulwark +6 DEF, Greed +50% shards & essence from kills,
+  Regeneration +2 HP regen per turn, Evasion +8% dodge, Bargain −20% shop and blacksmith
+  prices), reset to Floor 1, full heal, and the Rift grows stronger.
 - **Glory (account-wide)**: 15 achievements persist across every run — First Blood,
   Boss Slayer, Deep Delver, Dungeon Master, Riftbreaker, Legendary Hunter,
   Death Is a Teacher, Master of the Rift, Aspect of Eternity, Slayer, Midas,
@@ -444,7 +494,7 @@ collecting its toll.
 - **Hardcore death**: `glory::fall()` — save erased, Fallen hero recorded (class, level,
   floor, kills, gold earned), "Pay the Iron Price" earned.
 - Saves (`save1.rpg`..`save3.rpg`) and Glory (`glory.rpg`) are **checksummed**; the
-  current save format is v9 (hardcore flag). Saves persist at each floor's milestones,
+  current save format is v10 (Paladin class, trinket slot, perk flags, and persisted RNG stream). Saves persist at each floor's milestones,
   at camp, and on clean quit.
 - There is **no mid-run save-scumming** — deaths in hardcore are final by design.
 

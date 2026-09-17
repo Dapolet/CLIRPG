@@ -3,6 +3,7 @@
 #include "ui.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -13,6 +14,8 @@ namespace rpg::glory {
 namespace {
 
 const char* kPath = "glory.rpg";
+
+constexpr std::size_t kMaxFallen = 50;
 
 unsigned char checksum(const std::string& s) {
     unsigned char c = 0;
@@ -113,7 +116,7 @@ Data load() {
             const auto f = split(line.substr(7), '|');
             if (f.size() < 5) continue;
             const int cls = std::atoi(f[0].c_str());
-            if (cls < 0 || cls >= static_cast<int>(ClassId::Rogue) + 1) continue;
+            if (cls < 0 || cls >= static_cast<int>(ClassId::Paladin) + 1) continue;
             Fallen fe;
             fe.cls = static_cast<ClassId>(cls);
             fe.level = std::atoi(f[1].c_str());
@@ -150,6 +153,9 @@ void fall(const Character& pc, const Vault& vault) {
     f.kills = vault.kills;
     f.goldEarned = vault.totalGoldEarned;
     d.fallen.push_back(f);
+    if (d.fallen.size() > kMaxFallen)
+        d.fallen.erase(d.fallen.begin(),
+                       d.fallen.begin() + static_cast<std::ptrdiff_t>(d.fallen.size() - kMaxFallen));
     if (!d.unlocked[14]) {
         d.unlocked[14] = true;
         std::cout << ui::color(ui::c::bad, ui::bold("Achievement unlocked")) << ": "

@@ -11,6 +11,7 @@ namespace rpg::combat {
 
 enum class EnemyAffix {
     None, Vampiric, Regenerating, Armored, Ethereal, Berserker, Cursed,
+    Radiant, Hexer, Summoner,
 };
 const char* enemyAffixName(EnemyAffix a);
 
@@ -18,6 +19,7 @@ struct Enemy {
     std::string name;
     bool boss = false;
     bool elite = false;
+    bool summonUsed = false;
     int hpMax = 0;
     int hp = 0;
     int attack = 0;
@@ -54,6 +56,13 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
 // Encounter / boss generation. aspect = Rift Aspect prestige level.
 std::vector<Enemy> makeEncounter(int floor, core::Rng& rng, int aspect = 0);
 Enemy makeBoss(int floor, core::Rng& rng, int aspect = 0);
+
+bool resolveSummon(Enemy& e, std::vector<Enemy>& enemies);
+
+int strikeOnce(Character& pc, const EffectiveStats& st, Enemy& e, core::Rng& rng,
+               int& adrenaline, int critExtra = 0);
+int castOnce(Character& pc, const EffectiveStats& st, const Spell& s, Enemy& e,
+             core::Rng& rng, int& adrenaline, int critExtra = 0);
 
 // Named zone for a floor band (display + bestiary record).
 const char* biomeFor(int floor);

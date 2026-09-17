@@ -7,10 +7,12 @@
 
 namespace rpg::save {
 
-constexpr int kVersion = 9;
+constexpr int kVersion = 10;
 
-bool write(const std::string& path, const Character& pc, Vault& vault);
-bool read(const std::string& path, Character* pc, Vault* vault);
+bool write(const std::string& path, const Character& pc, Vault& vault,
+           const core::Rng* rng = nullptr);
+bool read(const std::string& path, Character* pc, Vault* vault,
+          core::Rng* rng = nullptr);
 bool erase(const std::string& path);   // permadeath: remove the save file
 
 struct SaveSummary {

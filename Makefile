@@ -1,7 +1,7 @@
 # Endless Rift — MSYS2/Windows-compatible Makefile (src/ + build/ layout)
 CXX       ?= g++
 STD       := -std=c++20
-WARN      := -Wall -Wextra -Wpedantic
+WARN      := -Wall -Wextra -Wpedantic $(if $(WERROR),-Werror,)
 OPT       := -O2
 COMMON    := $(STD) $(WARN) $(OPT)
 SRC       := src
@@ -36,6 +36,7 @@ CFILES    := $(addprefix $(SRC)/,$(SRCS))
 GAMECFILES:= $(addprefix $(SRC)/,$(GAME))
 RPGCFILES := $(GAMECFILES) $(SRC)/$(MAIN)
 ASANTESTF := $(GAMECFILES) $(SRC)/$(TEST)
+HDRS      := $(wildcard $(SRC)/*.hpp)
 
 BIN_NAME  ?= clirpg
 RPG       := $(BUILD)/$(BIN_NAME)$(EXE_EXT)
@@ -59,13 +60,13 @@ $(TESTS): $(GAMEOBJS) $(TESTOBJ)
 	$(CXX) $(COMMON) $^ -o $@
 
 # ASan/UBSan binaries are compiled from source with instrumentation.
-$(RPG_ASAN): $(RPGCFILES)
+$(RPG_ASAN): $(RPGCFILES) $(HDRS)
 	@mkdir -p $(BUILD)
-	$(CXX) $(COMMON) -O1 -g -fsanitize=address,undefined $^ -o $@
+	$(CXX) $(COMMON) -O1 -g -fsanitize=address,undefined $(RPGCFILES) -o $@
 
-$(CAS_TST): $(ASANTESTF)
+$(CAS_TST): $(ASANTESTF) $(HDRS)
 	@mkdir -p $(BUILD)
-	$(CXX) $(COMMON) -O1 -g -fsanitize=address,undefined $^ -o $@
+	$(CXX) $(COMMON) -O1 -g -fsanitize=address,undefined $(ASANTESTF) -o $@
 
 tests: $(TESTS)
 	./$(TESTS)
@@ -74,6 +75,26 @@ asan: $(RPG_ASAN)
 
 tests_asan: $(CAS_TST)
 	./$(CAS_TST)
+
+COVOBJ   := $(BUILD)/tests_cov$(EXE_EXT)
+COVSRCS  := $(GAMECFILES) $(SRC)/$(TEST)
+$(COVOBJ): $(COVSRCS) $(HDRS)
+	@mkdir -p $(BUILD)
+	$(CXX) $(STD) -O0 -g --coverage $(GAMECFILES) $(SRC)/$(TEST) -o $@
+
+coverage: $(COVOBJ)
+	@rm -f $(BUILD)/*.gcda
+	@cd $(BUILD) && ./tests_cov$(EXE_EXT) >/dev/null 2>&1 || true
+	@echo "--- gcov summaries (relative paths shown per source file) ---"
+	@cd $(BUILD) && for f in $(GAME) $(TEST) $(MAIN); do \
+	    if command -v gcov >/dev/null 2>&1; then \
+	        gcov -o . ../src/$${f%.cpp}.cpp | rg "Lines executed|Branches executed" | \
+	            sed "s/^/  $$f: /"; \
+	    else \
+	        echo "  (gcov not found — skipping $$f)"; \
+	    fi; \
+	done
+
 
 run: $(RPG)
 	./$(RPG)
