@@ -31,7 +31,7 @@ Everything else below is the fine print.
 | `make` | Builds `./build/clirpg` (zero warnings). |
 | `./build/clirpg` | Play. |
 | `./build/clirpg --plain` (or `-p` / `--no-color`) | No ANSI color, ASCII glyphs — for logs, tests, SSH-over-pipes, screenshots. |
-| `make tests` | 18,582-check test suite. |
+| `make tests` | 18,632-check test suite. |
 | `make tests_asan` | The same suite under ASan/UBSan. |
 
 Panel width follows the terminal (`COLUMNS` or ioctl), clamped between **44 and 100
@@ -57,7 +57,7 @@ columns**; panels wrap and never exceed it. The codebase is MSYS2-GCC clean (Win
 
 ### Save slots
 
-`slot1.rpg`/`slot2.rpg`/`slot3.rpg` — one hero each. Continue loads a slot; the slot
+`save1.rpg`/`save2.rpg`/`save3.rpg` — one hero each. Continue loads a slot; the slot
 line shows class, level, floor, and hardcore status. Starting New Game on an occupied
 slot overwrites it (your call).
 
@@ -307,7 +307,7 @@ level 1.)*
 All Necromancers innately **steal 10% of all damage dealt** (spells included) as HP, and
 their **Soul Harvest** passive refunds `+2 Soul` every time an enemy dies (capped at max
 Soul). The Skeleton Knight is the game's only **summon**: a permanent bodyguard that
-auto-attacks the weakest living foe each round and absorbs hits meant for you. It is
+brawls a random living foe each round and absorbs hits meant for you. It is
 **not** counted as a kill and grants no XP/loot — unlike you, it never outlevels anything.
 
 **Decay** (poison DoT — pairs with life steal)
@@ -512,12 +512,13 @@ collecting its toll.
   Leeching +2% life steal, Bulwark +6 DEF, Greed +50% shards & essence from kills,
   Regeneration +2 HP regen per turn, Evasion +8% dodge, Bargain −20% shop and blacksmith
   prices), reset to Floor 1, full heal, and the Rift grows stronger.
-- **Glory (account-wide)**: 15 achievements persist across every run — First Blood,
+- **Glory (account-wide)**: 20 achievements persist across every run — First Blood,
   Boss Slayer, Deep Delver, Dungeon Master, Riftbreaker, Legendary Hunter,
   Death Is a Teacher, Master of the Rift, Aspect of Eternity, Slayer, Midas,
-  Hardcore Heart, From the Ashes, Immortal, Pay the Iron Price. The **Records** screen
-  (camp 10) shows best floor, bosses slain, kills, legendaries found, mastery, the n/15
-  tracker, and the Fallen list.
+  Hardcore Heart, From the Ashes, Immortal, Pay the Iron Price, Warden of the Rift,
+  Rift Cartographer, Collector of Nightmares, Spellmaster, Infinite Descent. The
+  **Records** screen (camp 10) shows best floor, bosses slain, kills, legendaries
+  found, mastery, the n/20 tracker, and the Fallen list.
 
 ---
 

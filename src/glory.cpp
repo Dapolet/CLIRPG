@@ -32,6 +32,7 @@ std::vector<std::string> split(const std::string& s, char d) {
 }
 
 bool wouldEarn(const Character& pc, const Vault& v, int i) {
+    const auto tree = pc.tree();
     switch (i) {
         case 0:  return v.kills >= 1;
         case 1:  return v.bossesSlain >= 1;
@@ -47,6 +48,12 @@ bool wouldEarn(const Character& pc, const Vault& v, int i) {
         case 11: return pc.hardcore();
         case 12: return pc.hardcore() && v.bestFloor >= 25;
         case 13: return pc.hardcore() && v.bestFloor >= 50;
+        case 15: return static_cast<int>(v.bestiary.bosses.size()) >= 10;
+        case 16: return static_cast<int>(v.bestiary.biomes.size()) >= 12;
+        case 17: return static_cast<int>(v.bestiary.affixes.size()) >= 9;
+        case 18: return std::all_of(tree.begin(), tree.end(),
+                                    [](bool b) { return b; });
+        case 19: return v.bestFloor >= 150;
         default: return false;   // 14 (Pay the Iron Price) is granted by fall()
     }
 }
@@ -182,6 +189,11 @@ const char* achievementName(int i) {
         case 12: return "From the Ashes";
         case 13: return "Immortal";
         case 14: return "Pay the Iron Price";
+        case 15: return "Warden of the Rift";
+        case 16: return "Rift Cartographer";
+        case 17: return "Collector of Nightmares";
+        case 18: return "Spellmaster";
+        case 19: return "Infinite Descent";
         default: return "?";
     }
 }

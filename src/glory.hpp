@@ -10,7 +10,7 @@
 namespace rpg::glory {
 
 constexpr int kVersion = 1;
-constexpr int kNumAchievements = 15;
+constexpr int kNumAchievements = 20;
 
 // The account-wide Glory track: achievements are evaluated from the
 // character+vault snapshot each time they are re-checked, and once earned

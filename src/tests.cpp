@@ -1541,6 +1541,47 @@ void testGloryTrack() {
     for (int i = 0; i < 60; ++i) glory::fall(pc, v);
     CHECK(glory::load().fallen.size() == 50, "fallen list is capped at 50");
 
+    // achievements 15-19 key off the codex, the spell tree, and deeper floors
+    Character master(ClassId::Mage);
+    while (master.skillPoints() < 30) master.gainXp(master.xpToNext(), 0);
+    for (int b = 0; b < 3; ++b)
+        for (int d = 0; d < 4; ++d) CHECK(master.spendPoint(b, d), "leveled mage learns every spell");
+
+    const char* const kBiomes[] = {
+        "Crystal Shallows", "Mossfall Depths", "Hollow Warrens", "Cinder Vault",
+        "Frostbound Fissure", "Drowned Crypt", "Ash Cathedral", "Mire of Echoes",
+        "Basalt Maw", "Shattered Twilight", "Abyssal Shrine", "The Endless Dark",
+    };
+    const char* const kAffixes[] = {
+        "Vampiric", "Regenerating", "Armored", "Ethereal", "Berserker",
+        "Cursed", "Radiant", "Hexer", "Summoner",
+    };
+    const char* const kNineBosses[] = {
+        "Twin Fang", "Baron Gore", "Ashen Witch", "Stone Tyrant", "Void Serpent",
+        "Infernal Duke", "Abyssal Warden", "The Sunderer", "Nightmare Sovereign",
+    };
+
+    Vault v3;
+    v3.bestFloor = 149;
+    for (const char* n : kBiomes) v3.bestiary.addBiome(n);
+    for (const char* n : kAffixes) v3.bestiary.addAffix(n);
+    for (const char* n : kNineBosses) v3.bestiary.addBoss(n);
+    glory::sync(master, v3);
+    const auto p1 = glory::load();
+    CHECK(glory::unlockedCount(p1) == 15, "codex milestones land at 15 unlocks");
+    CHECK(p1.unlocked[16] && p1.unlocked[17] && p1.unlocked[18],
+          "Cartographer / Collector of Nightmares / Spellmaster earned");
+    CHECK(!p1.unlocked[15] && !p1.unlocked[19],
+          "Warden (9/10 bosses) and Infinite Descent (floor 149) stay locked");
+
+    v3.bestiary.addBoss("Eternal One");
+    v3.bestFloor = 150;
+    glory::sync(master, v3);
+    const auto p2 = glory::load();
+    CHECK(glory::unlockedCount(p2) == 17, "completing the codex unlocks Warden + Infinite Descent");
+    CHECK(p2.unlocked[15] && p2.unlocked[19], "Warden of the Rift and Infinite Descent earned");
+    CHECK(glory::load().unlocked == p2.unlocked, "new achievement unlocks persist");
+
     std::remove(path.c_str());
 }
 

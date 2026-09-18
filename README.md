@@ -4,9 +4,9 @@
 
 Descend an endless rift, clear floors, hoard loot, and push your build to the limit. Pure TTY flavor with a colorful themed UI (16-color ANSI) that degrades gracefully to plain ASCII in pipes, tests, and CI.
 
-![Badge: C++20](https://img.shields.io/badge/C%2B%2B-20-blue) ![Badge: no-deps](https://img.shields.io/badge/dependencies-none-brightgreen) ![Badge: tests](https://img.shields.io/badge/tests-18614%20checks-success) ![Badge: platform](https://img.shields.io/badge/macOS-Linux-Windows-brightgreen)
+![Badge: C++20](https://img.shields.io/badge/C%2B%2B-20-blue) ![Badge: no-deps](https://img.shields.io/badge/dependencies-none-brightgreen) ![Badge: tests](https://img.shields.io/badge/tests-18632%20checks-success) ![Badge: platform](https://img.shields.io/badge/macOS-Linux-Windows-brightgreen)
 
-> **New here?** Read [HOW_TO_PLAY.md](HOW_TO_PLAY.md) — a full class-by-class, mechanic-by-mechanic guide.
+> **New here?** Read [HOW_TO_PLAY.md](docs/HOW_TO_PLAY.md) — a full class-by-class, mechanic-by-mechanic guide.
 
 ---
 
@@ -53,9 +53,9 @@ Victory! +8 XP, +12 gold
 
 - **Robust save system** — `RPGSAVE v10` (checksummed), three slots (`save1-3.rpg`), roguelike death rules. Inspect or hand-verify it in any text editor.
 - **Softcore & Hardcore** — start a run soft (death costs 20% gold and a floor, the vault endures) or hardcore (death erases the save and your hero is etched forever into the Glory track).
-- **Achievement track** — an account-wide **Glory** list in `glory.rpg` (15 achievements, checksummed): unlocks persist even after a slot is overwritten, and every fallen hardcore hero is remembered.
+- **Achievement track** — an account-wide **Glory** list in `glory.rpg` (20 achievements, checksummed): unlocks persist even after a slot is overwritten, and every fallen hardcore hero is remembered.
 - **Plain mode / `NO_COLOR`** — full ANSI on a TTY; clean ASCII in pipes, terminals that say `dumb`, or with `--plain`. Every glyph has an ASCII twin (e.g. ◆ healing → `o`), so the game reads fine with zero Unicode. Standard `NO_COLOR` respected.
-- **Tested hard** — 18,614 assertions across the suite, ASan + UBSan-clean, MSYS2 GCC Windows CI gate.
+- **Tested hard** — 18,632 assertions across the suite, ASan + UBSan-clean, MSYS2 GCC Windows CI gate.
 - **A coherent panel grammar** — semantic color tokens (`ui::c::`), one boxed flow for every menu/event screen, `chip + glyph + label` rows throughout the camp and merchant, and width-aware `wrap()` guards so panels never outgrow the terminal in plain mode.
 
 ---
@@ -149,7 +149,7 @@ Every field is human-readable — kill records, perks, belt kinds (`belt=3 0`), 
 ## 🧪 Tests & sanitizers
 
 ```sh
-make tests      # full suite → prints "18614 checks, 0 failures"
+make tests      # full suite → prints "18632 checks, 0 failures"
 make asan        # ASan+UBSan build of the game
 ./build/clirpg_asan   # play through it clean
 make tests_asan  # whole test suite under ASan+UBSan
@@ -175,7 +175,7 @@ One "check" = one assertion; the suite is a set of test cases that script stdout
 | `src/glory.cpp` | Account-wide achievement track + fallen heroes (`glory.rpg`) |
 | `src/core.cpp` | Shared formulas, constants, RNG |
 | `src/io.cpp` | Input handling (pipe-tolerant) |
-| `src/tests.cpp` | The 18,614-assertion harness |
+| `src/tests.cpp` | The 18,632-assertion harness |
 | `Makefile` | all / run / tests / asan / tests_asan / clean |
 
 ---

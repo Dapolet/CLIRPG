@@ -1,6 +1,6 @@
 # Achievements — Rift RPG
 
-15 achievements earnable on the account-wide **Glory track** (`glory.rpg`, in the
+20 achievements earnable on the account-wide **Glory track** (`glory.rpg`, in the
 project folder). They are evaluated from your current character + vault each time
 the track is synced (on save, after fights, at the camp, on ascension), and once
 unlocked they stay unlocked forever — even after the save slot is overwritten or
@@ -9,7 +9,7 @@ the run ends.
 When you earn one, the game prints:
 
 ```
-Achievement unlocked: <name>  (<n>/15)
+Achievement unlocked: <name>  (<n>/20)
 ```
 
 | # | Name                 | How to obtain                                                                                                       |
@@ -29,6 +29,11 @@ Achievement unlocked: <name>  (<n>/15)
 | 12 | **From the Ashes**   | Be on a **hardcore** run that reaches **Floor 25**.                                                                  |
 | 13 | **Immortal**         | Be on a **hardcore** run that reaches **Floor 50**.                                                                  |
 | 14 | **Pay the Iron Price** | **Die on a hardcore run** (permadeath). Granted at the moment of death via the Glory fall track.                   |
+| 15 | **Warden of the Rift** | Slay every one of the **10 named bosses** (the codex unlocks one entry per name killed).                          |
+| 16 | **Rift Cartographer** | Visit each of the **12 biomes** (one biome entry per name visited).                                                 |
+| 17 | **Collector of Nightmares** | Encounter all **9 enemy affixes** (one entry per affix seen).                                                   |
+| 18 | **Spellmaster**       | Learn **all 12 spells** in a single run (the full spell tree).                                                      |
+| 19 | **Infinite Descent**  | Reach **Floor 150** (deep in the endless descent).                                                                  |
 
 Notes
 - Hardcore achievements (11–13) grant the moment the qualifying character exists
