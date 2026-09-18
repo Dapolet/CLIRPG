@@ -117,11 +117,11 @@ std::vector<Spell> buildSpells(ClassId c) {
                                .effectTurns = 3, .enemyVulnPct = 30 });
             // branch 1: Order
             s.push_back(Spell{ .name = "Mend", .type = SpellType::Heal, .cost = 2,
-                               .cooldown = 1, .healPower = 8, .lvlScale = 1.0 });
+                               .cooldown = 1, .lvlScale = 1.0, .healPower = 8 });
             s.push_back(Spell{ .name = "Aegis", .type = SpellType::BuffSelf, .cost = 3,
                                .cooldown = 3, .buffDefense = 50, .buffTurns = 2 });
             s.push_back(Spell{ .name = "Sanctuary", .type = SpellType::Heal, .cost = 4,
-                               .cooldown = 3, .healPower = 12, .lvlScale = 1.4,
+                               .cooldown = 3, .lvlScale = 1.4, .healPower = 12,
                                .buffDefense = 30, .buffTurns = 2 });
             s.push_back(Spell{ .name = "Consecrate", .type = SpellType::BuffSelf, .cost = 5,
                                .cooldown = 5, .buffDefense = 100, .buffTurns = 2 });
@@ -130,7 +130,7 @@ std::vector<Spell> buildSpells(ClassId c) {
                                .lvlScale = 1.0, .effect = C::Enfeeble, .effectTurns = 3,
                                .enemyAtkDownPct = 30 });
             s.push_back(Spell{ .name = "Blessed Rally", .type = SpellType::Heal, .cost = 3,
-                               .cooldown = 3, .healPower = 8, .lvlScale = 1.0,
+                               .cooldown = 3, .lvlScale = 1.0, .healPower = 8,
                                .buffAttack = 25, .buffTurns = 2 });
             s.push_back(Spell{ .name = "Radiant Brand", .cost = 5, .cooldown = 3, .potency = 6,
                                .lvlScale = 1.6, .effect = C::Vulnerable, .effectTurns = 3,
