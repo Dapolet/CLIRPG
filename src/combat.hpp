@@ -34,6 +34,18 @@ struct Enemy {
     bool has(EnemyAffix a) const;
 };
 
+// A player's summoned ally (e.g. Necromancer's "Arise, Skeleton Knight").
+// Lives for a single fight: auto-attacks each round and absorbs enemy hits.
+struct Minion {
+    std::string name;
+    int hpMax = 0;
+    int hp = 0;
+    int attack = 0;
+    int defense = 0;
+
+    bool alive() const { return hp > 0; }
+};
+
 struct Loot {
     int gold = 0;
     int shards = 0;

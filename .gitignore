@@ -17,5 +17,8 @@ glory.rpg
 # handoff/scratch notes for the working session
 progress.md
 
-# docs are local planning/memory notes only (GitHub page = root README.md)
-docs/
+# local planning/memory notes (not part of the shipped docs)
+local/
+
+# editor workspace config
+.vscode/

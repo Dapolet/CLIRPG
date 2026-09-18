@@ -63,16 +63,16 @@ slot overwrites it (your call).
 
 ### Classes
 
-| | Warrior | Mage | Rogue | Paladin |
-| --- | --- | --- | --- | --- |
-| HP | 40 + 7/level | 26 + 4/level | 30 + 5/level | 34 + 6/level |
-| Resource | Stamina (14 + 2/lvl) | Mana (20 + 3/lvl) | Energy (16 + 3/lvl) | Conviction (16 + 3/lvl) |
-| Resource regen/turn | +1 | +2 | +1 | +1 |
-| ATK | 7 + 2/lvl | 4 + 1/lvl | 6 + 2/lvl | 6 + 2/lvl |
-| DEF | 3 + 1/lvl | 1 + (lvl-1)/2 | 2 + (lvl-1)/2 | 2 + 1/lvl |
-| Crit chance | 5% | 5% | 10 + (lvl-1)/4 % | 5% |
-| Crit bonus dmg | +10% | +15% | +20% | +10% |
-| Passive | **Adrenaline** — each hit you take gives +15% to your next attack (stacks). | **Arcane Flow** — faster mana regen. | **First Strike** — +25% crit on round 1, and enemies are caught off-guard, skipping their first turn. | **Righteous Grace** — all healing you receive (spells, potions, regen, lifesteal) is increased by 25%. |
+| | Warrior | Mage | Rogue | Paladin | Necromancer |
+| --- | --- | --- | --- | --- | --- |
+| HP | 40 + 7/level | 26 + 4/level | 30 + 5/level | 34 + 6/level | 30 + 5/level |
+| Resource | Stamina (14 + 2/lvl) | Mana (20 + 3/lvl) | Energy (16 + 3/lvl) | Conviction (16 + 3/lvl) | Soul (16 + 3/lvl) |
+| Resource regen/turn | +1 | +2 | +1 | +1 | +1 |
+| ATK | 7 + 2/lvl | 4 + 1/lvl | 6 + 2/lvl | 6 + 2/lvl | 5 + 1/lvl |
+| DEF | 3 + 1/lvl | 1 + (lvl-1)/2 | 2 + (lvl-1)/2 | 2 + 1/lvl | 2 + (lvl-1)/2 |
+| Crit chance | 5% | 5% | 10 + (lvl-1)/4 % | 5% | 5% |
+| Crit bonus dmg | +10% | +15% | +20% | +10% | +15% |
+| Passive | **Adrenaline** — each hit you take gives +15% to your next attack (stacks). | **Arcane Flow** — faster mana regen. | **First Strike** — +25% crit on round 1, and enemies are caught off-guard, skipping their first turn. | **Righteous Grace** — all healing you receive (spells, potions, regen, lifesteal) is increased by 25%. | **Soul Harvest** — innate 10% life steal, and each kill refunds +2 Soul (up to your cap). |
 
 **Spell branches per class** (3 branches x 4 ranks each — see *Spells* for the full list):
 
@@ -82,6 +82,7 @@ slot overwrites it (your call).
 | Mage | Fire | Frost | Arcane |
 | Rogue | Shadow (crit burst) | Poison (DoT/debuffs) | Tricks (multi-hit/burst) |
 | Paladin | Holy (damage) | Order (shields/heals) | Light (heals/debuffs) |
+| Necromancer | Decay (DoT/lifesteal) | Death (damage/debuffs) | Undeath (shields/sustain/summon) |
 
 ### Modes
 
@@ -301,6 +302,38 @@ level 1.)*
 | 3 | Radiant Brand | 5 res | 3 | 7-8 dmg + Vulnerable 3 turns, enemy takes +30% |
 | 4 | Sunburst | 8 res | 4 | 16-19 dmg, 35% stun |
 
+### Necromancer
+
+All Necromancers innately **steal 10% of all damage dealt** (spells included) as HP, and
+their **Soul Harvest** passive refunds `+2 Soul` every time an enemy dies (capped at max
+Soul). The Skeleton Knight is the game's only **summon**: a permanent bodyguard that
+auto-attacks the weakest living foe each round and absorbs hits meant for you. It is
+**not** counted as a kill and grants no XP/loot — unlike you, it never outlevels anything.
+
+**Decay** (poison DoT — pairs with life steal)
+| Rank | Spell | Cost | CD | Effect |
+| --- | --- | --- | --- | --- |
+| 1 | Corpse Rot | 2 res | 1 | 4 dmg + Poison 3 turns |
+| 2 | Rustbrand | 4 res | 2 | 7 dmg, shreds 30 DEF + Poison 3 turns |
+| 3 | Virulence | 6 res | 3 | 10 dmg + Poison 4 turns |
+| 4 | Flesh Harvest | 8 res | 4 | 16 dmg + Poison 3 turns |
+
+**Death**
+| Rank | Spell | Cost | CD | Effect |
+| --- | --- | --- | --- | --- |
+| 1 | Death Bolt | 2 res | 1 | 4 dmg |
+| 2 | Bone Lance | 4 res | 2 | 8 dmg, shreds 20 DEF |
+| 3 | Spirit Hex | 5 res | 3 | 4 dmg + Enfeeble 3 turns, enemy ATK -30% |
+| 4 | Death Mark | 7 res | 3 | 12 dmg + Vulnerable 3 turns, enemy takes +30% |
+
+**Undeath**
+| Rank | Spell | Cost | CD | Effect |
+| --- | --- | --- | --- | --- |
+| 1 | Bone Armor | 3 res | 3 | +50% DEF for 2 turns (buff) |
+| 2 | Soul Shroud | 3 res | 4 | +40% DEF for 1 turn + Guard 1 turn |
+| 3 | Arise, Skeleton Knight | 7 res | 6 | summon a Skeleton Knight (50% HP, 60% ATK) that fights alongside you; recast re-knits it |
+| 4 | Grave Pact | 6 res | 5 | heal 14 + 1.8/level HP, +40% DEF 2 turns |
+
 Spell damage = `max(1, round(potency + lvlScale x level) x enemyScale(floor))`, where
 `enemyScale(floor) = 1.07^(floor-1)` — the same curve enemies use for HP/attack. The
 numbers above are your Floor-1, level-1 values; as you level *and* descend, everything
@@ -494,7 +527,7 @@ collecting its toll.
 - **Hardcore death**: `glory::fall()` — save erased, Fallen hero recorded (class, level,
   floor, kills, gold earned), "Pay the Iron Price" earned.
 - Saves (`save1.rpg`..`save3.rpg`) and Glory (`glory.rpg`) are **checksummed**; the
-  current save format is v10 (Paladin class, trinket slot, perk flags, and persisted RNG stream). Saves persist at each floor's milestones,
+  current save format is v10 (Necromancer class, trinket slot, perk flags, and persisted RNG stream). Saves persist at each floor's milestones,
   at camp, and on clean quit.
 - There is **no mid-run save-scumming** — deaths in hardcore are final by design.
 

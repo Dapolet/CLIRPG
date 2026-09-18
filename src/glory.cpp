@@ -116,7 +116,7 @@ Data load() {
             const auto f = split(line.substr(7), '|');
             if (f.size() < 5) continue;
             const int cls = std::atoi(f[0].c_str());
-            if (cls < 0 || cls >= static_cast<int>(ClassId::Paladin) + 1) continue;
+            if (cls < 0 || cls >= kNumClasses) continue;
             Fallen fe;
             fe.cls = static_cast<ClassId>(cls);
             fe.level = std::atoi(f[1].c_str());

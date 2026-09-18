@@ -427,6 +427,8 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
     int adrenaline = 0;
     int roundNum = 0;
     bool roundStarted = false;
+    Minion minion;
+    bool hasMinion = false;
 
     if (st.aegisGuard > 0)
         applyStatus(pb, core::StatusEffect::Guard, 3, st.aegisGuard);
@@ -441,6 +443,10 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 ++res.kills;
                 vault.bestiary.addEnemy(e.name);
                 if (e.boss) vault.bestiary.addBoss(e.name);
+                if (pc.classId() == ClassId::Necromancer) {
+                    pc.restoreResource(2, st.maxResource);
+                    std::cout << ui::color(ui::c::arcane, "  Soul +2.") << "\n";
+                }
             }
     };
     // Manual multi-target selection.
@@ -495,6 +501,20 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                           + " bites you for " + std::to_string(dot)) << ".\n";
                 if (--it->turns <= 0) it = pb.erase(it);
                 else ++it;
+            }
+            // -- summoned ally strikes a random living enemy --
+            if (hasMinion && minion.alive() && anyAlive()) {
+                std::vector<std::size_t> alive;
+                for (std::size_t i = 0; i < enemies.size(); ++i)
+                    if (enemies[i].alive()) alive.push_back(i);
+                const std::size_t j = alive[rng.pick(alive.size())];
+                Enemy& m = enemies[j];
+                double dmg = static_cast<double>(minion.attack) * (0.9 + 0.2 * rng.roll01());
+                dmg = core::mitigate(dmg, mitigatedDef(m, eb[j]));
+                const int dealt = std::max(1, static_cast<int>(dmg));
+                m.hp = std::max(0, m.hp - dealt);
+                std::cout << ui::color(ui::c::arcane, "  Your " + minion.name + " strikes "
+                          + m.name + " for " + std::to_string(dealt) + " damage.") << "\n";
             }
             roundStarted = true;
             if (!pc.alive()) break;
@@ -695,7 +715,22 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                             applyStatus(pb, core::StatusEffect::Regeneration, s.effectTurns,
                                         std::max(1, st.maxHp / 12));
 
-                        if (s.potency > 0) {
+                        if (s.type == SpellType::Summon) {
+                            if (hasMinion && minion.alive()) {
+                                minion.hp = minion.hpMax;
+                                std::cout << ui::color(ui::c::arcane,
+                                          "  Your " + minion.name + "'s bones knit together.") << "\n";
+                            } else {
+                                hasMinion = true;
+                                minion.name = "Skeleton Knight";
+                                minion.hpMax = minion.hp =
+                                    st.maxHp * std::max(0, s.summonHpPct) / 100;
+                                minion.attack = st.attack * std::max(0, s.summonAtkPct) / 100;
+                                minion.defense = st.defense / 2;
+                                std::cout << ui::color(ui::c::arcane, ui::bold(
+                                          "  A Skeleton Knight arises to fight for you!")) << "\n";
+                            }
+                        } else if (s.potency > 0) {
                             const std::size_t tgt = chooseTarget();
                             Enemy& e = enemies[tgt];
                             const int total = dealSpell(pc, st, pb, s, e, eb[tgt], rng,
@@ -784,6 +819,14 @@ Result fight(Character& pc, Vault& vault, std::vector<Enemy> enemies, core::Rng&
                 const bool dodged = st.dodgeChance > 0 && rng.chance(st.dodgeChance / 100.0);
                 if (dodged) {
                     std::cout << ui::color(ui::c::good, "  You evade " + e.name + "'s attack.") << "\n";
+                } else if (hasMinion && minion.alive()) {
+                    minion.hp = std::max(0, minion.hp - dealt);
+                    std::cout << ui::color(ui::c::arcane, "  Your " + minion.name + " takes "
+                              + std::to_string(dealt) + " damage.")
+                              << (critical ? " (CRIT)" : "") << "\n";
+                    if (minion.hp <= 0)
+                        std::cout << ui::color(ui::c::frost, ui::bold(
+                                  "  Your " + minion.name + " collapses into bone!")) << "\n";
                 } else {
                     pc.takeDamage(dealt);
                     std::cout << ui::color(ui::c::bad, "  " + e.name + " hits you for " + std::to_string(dealt))

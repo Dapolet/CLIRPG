@@ -99,6 +99,7 @@ std::string passiveName(ClassId c) {
         case ClassId::Mage:    return "Arcane Flow";
         case ClassId::Rogue:   return "First Strike";
         case ClassId::Paladin: return "Righteous Grace";
+        case ClassId::Necromancer: return "Soul Harvest";
     }
     return "?";
 }
@@ -107,6 +108,8 @@ std::string branchName(ClassId c, int b) {
     if (c == ClassId::Warrior) return b == 0 ? "Berserker" : b == 1 ? "Defender" : "Warcry";
     if (c == ClassId::Mage)    return b == 0 ? "Fire"      : b == 1 ? "Frost"    : "Arcane";
     if (c == ClassId::Paladin) return b == 0 ? "Holy"      : b == 1 ? "Order"    : "Light";
+    if (c == ClassId::Necromancer)
+        return b == 0 ? "Decay" : b == 1 ? "Death" : "Undeath";
     return                        b == 0 ? "Shadow"     : b == 1 ? "Poison"   : "Tricks";
 }
 
@@ -544,13 +547,15 @@ ClassId chooseClass() {
         panelLine(color(c::mana, chip(2)) + bold("Mage")    + dim("  mana \u00b7 elemental spells"));
         panelLine(color(c::arcane, chip(3)) + bold("Rogue")   + dim("  energy \u00b7 crits & poison"));
         panelLine(color(c::good, chip(4)) + bold("Paladin")  + dim("  conviction \u00b7 holy power \u00b7 heals"));
+        panelLine(color(c::gold, chip(5)) + bold("Necromancer") + dim("  soul \u00b7 rot & bone shields \u00b7 summon"));
         panelBottom();
-        const int c = io::askInt("Class", 1, 4);
+        const int c = io::askInt("Class", 1, 5);
         switch (c) {
             case 1: return ClassId::Warrior;
             case 2: return ClassId::Mage;
             case 3: return ClassId::Rogue;
             case 4: return ClassId::Paladin;
+            case 5: return ClassId::Necromancer;
         }
     }
 }

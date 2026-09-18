@@ -258,7 +258,8 @@ void testAwaken() {
 }
 
 void testSpellTree() {
-    for (auto cls : { ClassId::Warrior, ClassId::Mage, ClassId::Rogue, ClassId::Paladin }) {
+    for (auto cls : { ClassId::Warrior, ClassId::Mage, ClassId::Rogue, ClassId::Paladin,
+                      ClassId::Necromancer }) {
         Character pc(cls);
         CHECK(classSpells(cls).size() == 12, "each class has 12 spells");
         CHECK(pc.pointsSpent() == 0, "fresh tree costs nothing");
@@ -2321,6 +2322,86 @@ void testPaladinClass() {
     CHECK(won, "Paladin can win a basic fight");
 }
 
+void testNecromancerClass() {
+    Character nec(ClassId::Necromancer);
+    Vault v;
+    CHECK(classSpells(ClassId::Necromancer).size() == 12, "Necromancer has 12 spells");
+    bool hasDoT = false, hasDebuff = false, hasHeal = false, hasShield = false, hasSummon = false;
+    for (const auto& s : classSpells(ClassId::Necromancer)) {
+        if (s.type == SpellType::Heal) hasHeal = true;
+        if (s.type == SpellType::Summon) hasSummon = true;
+        if (s.effect == core::StatusEffect::Poison && s.potency > 0) hasDoT = true;
+        if (s.enemyAtkDownPct > 0 || s.enemyVulnPct > 0) hasDebuff = true;
+        if (s.buffDefense > 0) hasShield = true;
+    }
+    CHECK(hasDoT && hasDebuff && hasHeal && hasShield && hasSummon,
+          "Necromancer tree covers DoT, debuffs, shields, sustain, and the summon");
+    CHECK(std::string(resourceName(ClassId::Necromancer)) == "Soul",
+          "Necromancer resource is Soul");
+    CHECK(std::string(className(ClassId::Necromancer)) == "Necromancer", "class name resolves");
+    const auto st = nec.stats(v);
+    CHECK(st.lifeStealPct == 10, "innate life steal is 10%");
+    CHECK(Character(ClassId::Warrior).stats(v).lifeStealPct == 0,
+          "only the Necromancer innately steals life");
+    CHECK(st.maxHp == 30 && st.maxResource == 16 && st.attack == 5 && st.defense == 2,
+          "level-1 baseline HP/Res/ATK/DEF");
+    const Spell& summon = classSpells(ClassId::Necromancer)[10];
+    CHECK(summon.type == SpellType::Summon, "summon sits at Undeath depth 2 (index 10)");
+    CHECK(summon.name == "Arise, Skeleton Knight", "summon is named Arise, Skeleton Knight");
+    CHECK(summon.summonHpPct == 50 && summon.summonAtkPct == 60,
+          "minion scales at 50% HP / 60% ATK");
+    CHECK(spellBlurb(summon, 1, 1, 5).find("summons a Skeleton Knight") != std::string::npos,
+          "summon blurb describes the minion");
+}
+
+void testNecromancerSummon() {
+    using namespace combat;
+    Character pc(ClassId::Necromancer);
+    while (pc.level() < 10) pc.gainXp(pc.xpToNext(), 0);
+    CHECK(pc.spendPoint(2, 0) && pc.spendPoint(2, 1) && pc.spendPoint(2, 2),
+          "can learn Undeath through the summon");
+    Vault v;
+    Enemy e;
+    e.name = "Stone Golem";
+    e.hpMax = e.hp = 400;
+    e.attack = 3;
+    e.xpReward = 1;
+    e.goldReward = 1;
+    e.critChance = 0;
+    core::Rng rng(11);
+    IoFixture io(std::string("s\n3\n") + repeat("a\n", 6) + "s\n3\n" + repeat("a\n", 40));
+    const Result r = fight(pc, v, { e }, rng);
+    CHECK(r.won, "summon-assisted fight finishes");
+    const std::string t = io.text();
+    CHECK(t.find("A Skeleton Knight arises to fight for you!") != std::string::npos,
+          "Arise summons the Skeleton Knight");
+    CHECK(t.find("Your Skeleton Knight strikes Stone Golem for") != std::string::npos,
+          "minion auto-attacks a living enemy");
+    CHECK(t.find("Your Skeleton Knight takes") != std::string::npos,
+          "minion absorbs enemy hits");
+    CHECK(t.find("bones knit together") != std::string::npos,
+          "re-cast re-knits a surviving skeleton");
+
+    Character pc2(ClassId::Necromancer);
+    while (pc2.level() < 10) pc2.gainXp(pc2.xpToNext(), 0);
+    CHECK(pc2.spendPoint(2, 0) && pc2.spendPoint(2, 1) && pc2.spendPoint(2, 2),
+          "relearn the summon for the collapse fight");
+    Vault v2;
+    Enemy a;
+    a.name = "Slayer";
+    a.hpMax = a.hp = 20;
+    a.attack = 40;
+    a.xpReward = 1;
+    a.goldReward = 1;
+    a.critChance = 0;
+    core::Rng rng2(4);
+    IoFixture io2(std::string("s\n3\n") + repeat("a\n", 20));
+    const Result r2 = fight(pc2, v2, { a }, rng2);
+    CHECK(r2.won, "collapse fight still winnable");
+    CHECK(io2.contains("collapses into bone"), "skeleton collapses after absorbing a hit");
+    CHECK(io2.contains("Soul +2."), "Soul Harvest refunds resource on the kill");
+}
+
 // ---------------------------------------------------------------------------
 // harness: RNG API
 // ---------------------------------------------------------------------------
@@ -3038,6 +3119,8 @@ static const Entry kTests[] = {
     { "testTrinketPowers", testTrinketPowers },
     { "testTrinketCombat", testTrinketCombat },
     { "testPaladinClass", testPaladinClass },
+    { "testNecromancerClass", testNecromancerClass },
+    { "testNecromancerSummon", testNecromancerSummon },
     { "testHardcorePermadeath", testHardcorePermadeath },
     { "testAmbienceSweep", testAmbienceSweep },
     { "testUiLayoutPlain", testUiLayoutPlain },

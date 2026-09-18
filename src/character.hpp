@@ -9,12 +9,13 @@
 
 namespace rpg {
 
-enum class ClassId { Warrior, Mage, Rogue, Paladin };
+enum class ClassId { Warrior, Mage, Rogue, Paladin, Necromancer };
+constexpr int kNumClasses = static_cast<int>(ClassId::Necromancer) + 1;
 
 const char* className(ClassId c);
 const char* resourceName(ClassId c);
 
-enum class SpellType { Attack, Heal, BuffSelf };
+enum class SpellType { Attack, Heal, BuffSelf, Summon };
 
 struct Spell {
     std::string name;
@@ -36,6 +37,9 @@ struct Spell {
     core::Element element = core::Element::None;
     int enemyAtkDownPct = 0;          // enemy: Enfeeble power  (-% attack)
     int enemyVulnPct = 0;             // enemy: Vulnerable power (+% damage taken)
+    int summonHpPct = 0;              // Summon: minion HP as % of player max HP
+    int summonAtkPct = 0;             // Summon: minion ATK as % of player ATK
+    int summonTurns = 0;              // Summon: rounds alive (0 = until killed)
 };
 
 // 12 spells per class; index = branch * 4 + depth. Built once, cached.

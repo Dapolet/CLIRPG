@@ -137,6 +137,34 @@ std::vector<Spell> buildSpells(ClassId c) {
                                .enemyVulnPct = 30 });
             s.push_back(atk("Sunburst", 8, 4, 14, 3.6, 1, C::Stun, 1, 0, 35));
             break;
+        case ClassId::Necromancer:
+            // branch 0: Decay
+            s.push_back(atk("Corpse Rot", 2, 1, 4, 1.2, 1, C::Poison, 3));
+            s.push_back(atk("Rustbrand", 4, 2, 7, 1.8, 1, C::Poison, 3, 30));
+            s.push_back(atk("Virulence", 6, 3, 10, 2.6, 1, C::Poison, 4));
+            s.push_back(atk("Flesh Harvest", 8, 4, 16, 4.5, 1, C::Poison, 3));
+            // branch 1: Death
+            s.push_back(atk("Death Bolt", 2, 1, 4, 1.3));
+            s.push_back(atk("Bone Lance", 4, 2, 8, 2.0, 1, C::None, 0, 20));
+            s.push_back(Spell{ .name = "Spirit Hex", .cost = 5, .cooldown = 3, .potency = 4,
+                               .lvlScale = 1.2, .effect = C::Enfeeble, .effectTurns = 3,
+                               .enemyAtkDownPct = 30 });
+            s.push_back(Spell{ .name = "Death Mark", .cost = 7, .cooldown = 3, .potency = 12,
+                               .lvlScale = 3.2, .effect = C::Vulnerable, .effectTurns = 3,
+                               .enemyVulnPct = 30 });
+            // branch 2: Undeath
+            s.push_back(Spell{ .name = "Bone Armor", .type = SpellType::BuffSelf, .cost = 3,
+                               .cooldown = 3, .buffDefense = 50, .buffTurns = 2 });
+            s.push_back(Spell{ .name = "Soul Shroud", .type = SpellType::BuffSelf, .cost = 3,
+                               .cooldown = 4, .buffDefense = 40, .buffTurns = 1,
+                               .effect = C::Guard, .effectTurns = 1 });
+            s.push_back(Spell{ .name = "Arise, Skeleton Knight", .type = SpellType::Summon,
+                               .cost = 7, .cooldown = 6,
+                               .summonHpPct = 50, .summonAtkPct = 60, .summonTurns = 0 });
+            s.push_back(Spell{ .name = "Grave Pact", .type = SpellType::Heal, .cost = 6,
+                               .cooldown = 5, .lvlScale = 1.8, .healPower = 14,
+                               .buffDefense = 40, .buffTurns = 2 });
+            break;
     }
     return s;
 }
@@ -148,11 +176,13 @@ const std::vector<Spell>& classSpells(ClassId c) {
     static const std::vector<Spell> mage    = buildSpells(ClassId::Mage);
     static const std::vector<Spell> rogue   = buildSpells(ClassId::Rogue);
     static const std::vector<Spell> paladin = buildSpells(ClassId::Paladin);
+    static const std::vector<Spell> necro   = buildSpells(ClassId::Necromancer);
     switch (c) {
         case ClassId::Warrior: return warrior;
         case ClassId::Mage:    return mage;
         case ClassId::Rogue:   return rogue;
         case ClassId::Paladin: return paladin;
+        case ClassId::Necromancer: return necro;
     }
     return warrior;
 }
@@ -163,6 +193,7 @@ const char* className(ClassId c) {
         case ClassId::Mage:    return "Mage";
         case ClassId::Rogue:   return "Rogue";
         case ClassId::Paladin: return "Paladin";
+        case ClassId::Necromancer: return "Necromancer";
     }
     return "?";
 }
@@ -173,6 +204,7 @@ const char* resourceName(ClassId c) {
         case ClassId::Mage:    return "Mana";
         case ClassId::Rogue:   return "Energy";
         case ClassId::Paladin: return "Conviction";
+        case ClassId::Necromancer: return "Soul";
     }
     return "?";
 }
@@ -204,6 +236,10 @@ std::string spellBlurb(const Spell& s, int level, int floor, int attack) {
         if (s.buffAttack > 0)  out += " +" + std::to_string(s.buffAttack) + "% ATK";
         if (s.buffDefense > 0) out += " +" + std::to_string(s.buffDefense) + "% DEF";
         if (s.buffTurns > 0)   out += " " + std::to_string(s.buffTurns) + " turns";
+    } else if (s.type == SpellType::Summon) {
+        out += "summons a Skeleton Knight ("
+               + std::to_string(s.summonHpPct) + "% HP, " + std::to_string(s.summonAtkPct)
+               + "% ATK), bodyguards you";
     } else {
         if (s.element != core::Element::None)
             out += std::string(core::elementName(s.element)) + " ";
@@ -262,6 +298,7 @@ int baseMaxHp(ClassId c, int level) {
         case ClassId::Mage:    return 26 + (level - 1) * 4;
         case ClassId::Rogue:   return 30 + (level - 1) * 5;
         case ClassId::Paladin: return 34 + (level - 1) * 6;
+        case ClassId::Necromancer: return 30 + (level - 1) * 5;
     }
     return 30;
 }
@@ -272,6 +309,7 @@ int baseResource(ClassId c, int level) {
         case ClassId::Mage:    return 20 + (level - 1) * 3;
         case ClassId::Rogue:   return 16 + (level - 1) * 3;
         case ClassId::Paladin: return 16 + (level - 1) * 3;
+        case ClassId::Necromancer: return 16 + (level - 1) * 3;
     }
     return 16;
 }
@@ -282,6 +320,7 @@ int baseAttack(ClassId c, int level) {
         case ClassId::Mage:    return 4 + (level - 1) * 1;
         case ClassId::Rogue:   return 6 + (level - 1) * 2;
         case ClassId::Paladin: return 6 + (level - 1) * 2;
+        case ClassId::Necromancer: return 5 + (level - 1) * 1;
     }
     return 6;
 }
@@ -292,6 +331,7 @@ int baseDefense(ClassId c, int level) {
         case ClassId::Mage:    return 1 + (level - 1) / 2;
         case ClassId::Rogue:   return 2 + (level - 1) / 2;
         case ClassId::Paladin: return 2 + (level - 1);
+        case ClassId::Necromancer: return 2 + (level - 1) / 2;
     }
     return 2;
 }
@@ -302,6 +342,7 @@ int baseCrit(ClassId c, int level) {
         case ClassId::Mage:    return 5;
         case ClassId::Rogue:   return 10 + (level - 1) / 4;
         case ClassId::Paladin: return 5;
+        case ClassId::Necromancer: return 5;
     }
     return 5;
 }
@@ -312,6 +353,7 @@ int baseCritBonus(ClassId c) {
         case ClassId::Mage:    return 15;
         case ClassId::Rogue:   return 20;
         case ClassId::Paladin: return 10;
+        case ClassId::Necromancer: return 15;
     }
     return 10;
 }
@@ -333,6 +375,7 @@ EffectiveStats Character::stats(const Vault& vault) const {
     s.critBonus    = baseCritBonus(classId_);
 
     if (classId_ == ClassId::Paladin) s.healAmpPct += 25;
+    if (classId_ == ClassId::Necromancer) s.lifeStealPct += 10;
 
     int dmgPct = 0, defPct = 0, hpPct = 0;
 

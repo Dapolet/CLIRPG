@@ -5,6 +5,7 @@
 #include <ctime>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
 namespace rpg::save {
@@ -269,7 +270,12 @@ bool read(const std::string& path, Character* pc, Vault* vault, core::Rng* rng) 
             else if (kv(line, "item=", &val)) itemLines.push_back(val);
             else if (kv(line, "rune=", &val)) runeLines.push_back(val);
         } else {
-            if (kv(line, "class=", &val)) snap.id = static_cast<ClassId>(std::stoi(val));
+            if (kv(line, "class=", &val)) {
+                const int cls = std::stoi(val);
+                if (cls < 0 || cls >= kNumClasses)
+                    throw std::invalid_argument("class out of range");
+                snap.id = static_cast<ClassId>(cls);
+            }
             else if (kv(line, "level=", &val)) snap.level = std::stoi(val);
             else if (kv(line, "xp=", &val)) snap.xp = std::stoi(val);
             else if (kv(line, "skillPoints=", &val)) snap.skillPoints = std::stoi(val);
